@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Dark theme (default) tokens */
+  --color-bg-base: #0E0D0C;
+  --color-bg-surface: #161412;
+  --color-bg-raised: #1F1C19;
+  --color-bg-overlay: #26221E;
+  
+  --color-border-subtle: #24201C;
+  --color-border-default: #2B2622;
+  --color-border-strong: #3A342E;
+  
+  --color-text-primary: #EDEDEC;
+  --color-text-secondary: #B5B2AC;
+  --color-text-muted: #807B73;
+  
+  --color-accent: #E8590C;
+  --color-accent-hover: #D9480F;
+  --color-accent-active: #C23E0A;
+  --color-accent-subtle: rgba(232, 89, 12, 0.12);
+  --color-accent-border: rgba(232, 89, 12, 0.35);
+
+  --color-healthy: #2F9E44;
+  --color-healthy-bg: rgba(47, 158, 68, 0.12);
+  --color-warning: #F59F00;
+  --color-warning-bg: rgba(245, 159, 0, 0.12);
+  --color-error: #E03131;
+  --color-error-bg: rgba(224, 49, 49, 0.12);
+}
+
+html.light {
+  /* Light theme tokens */
+  --color-bg-base: #FBFBF9;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-raised: #F4F3EF;
+  --color-bg-overlay: #ECEBE5;
+  
+  --color-border-subtle: #EDECE6;
+  --color-border-default: #E2E0D9;
+  --color-border-strong: #CCC9BF;
+  
+  --color-text-primary: #1C1B1A;
+  --color-text-secondary: #5C5852;
+  --color-text-muted: #8C877D;
+  
+  --color-accent: #D9480F;
+  --color-accent-hover: #C23E0A;
+  --color-accent-active: #A93306;
+  --color-accent-subtle: rgba(217, 72, 15, 0.1);
+  --color-accent-border: rgba(217, 72, 15, 0.3);
+
+  --color-healthy: #2B8A3E;
+  --color-healthy-bg: rgba(43, 138, 62, 0.1);
+  --color-warning: #E67700;
+  --color-warning-bg: rgba(230, 119, 0, 0.1);
+  --color-error: #C92A2A;
+  --color-error-bg: rgba(201, 42, 42, 0.1);
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 150ms ease, color 150ms ease;
+  overflow-x: hidden;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

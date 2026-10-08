@@ -1,0 +1,8 @@
+node_modules
+dist
+.nonstop
+*.log
+.env
+test-*.ts
+set-free-models.ts
+update-opencode.ts

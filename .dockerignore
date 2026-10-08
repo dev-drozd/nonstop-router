@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.nonstop
+*.log
+scratch
+test-*.ts
+set-free-models.ts
+update-opencode.ts
