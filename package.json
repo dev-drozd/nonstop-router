@@ -1,6 +1,6 @@
 {
   "name": "nonstop-router",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Local-first LLM gateway with transparent key and model failover for AI coding tools (OpenCode, Claude Code, Codex, Cline, Aider, Continue, Zed).",
   "main": "dist/server/index.js",

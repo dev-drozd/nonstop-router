@@ -187,12 +187,23 @@ html.light .landing-grid-bg {
   animation: signalPulse 2.8s ease-in-out infinite;
 }
 
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+/* Live routing flow: the newest edge draws in, then settles. */
+@keyframes flowEdgeDraw {
+  from {
+    stroke-dasharray: 400;
+    stroke-dashoffset: 400;
+    opacity: 0;
+  }
+  to {
+    stroke-dasharray: 400;
+    stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
+
+.flow-edge-new {
+  animation: flowEdgeDraw 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Reduced motion */
 

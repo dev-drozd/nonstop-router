@@ -105,6 +105,52 @@ function broadcastEvent(event: string, data: any) {
   }
 }
 
+/** Structured, UI-friendly summary of a completed request for the live flow view. */
+function buildFlowEvent(opts: {
+  endpoint: string;
+  clientTool: string;
+  model: string;
+  chainName: string;
+  finalTarget?: RouteTarget | null;
+  attempts: any[];
+  latencyMs: number;
+  ttftMs?: number | null;
+  cached?: boolean;
+  success: boolean;
+}) {
+  const attempts = (opts.attempts || []).map((a: any) => ({
+    providerId: a.providerId,
+    providerName: a.providerName,
+    modelId: a.modelId,
+    success: Boolean(a.success),
+    keyId: a.keyId,
+    statusCode: a.statusCode ?? null,
+    error: a.error ? String(a.error).slice(0, 200) : null,
+    durationMs: a.durationMs ?? null,
+  }));
+  const failedOver = attempts.filter(a => !a.success).length;
+  const winningKeyId = opts.finalTarget
+    ? (attempts.find(a => a.success && a.providerId === opts.finalTarget!.providerId)?.keyId ?? null)
+    : null;
+  return {
+    timestamp: Date.now(),
+    endpoint: opts.endpoint,
+    clientTool: opts.clientTool,
+    model: opts.model,
+    chainName: opts.chainName,
+    finalProviderId: opts.finalTarget?.providerId || null,
+    finalProviderName: opts.finalTarget?.providerName || null,
+    finalKeyId: winningKeyId,
+    target: opts.finalTarget ? `${opts.finalTarget.providerName}/${opts.finalTarget.modelId}` : null,
+    latencyMs: opts.latencyMs,
+    ttftMs: opts.ttftMs ?? null,
+    failovers: failedOver,
+    attempts,
+    cached: Boolean(opts.cached),
+    success: opts.success,
+  };
+}
+
 // -------------------------------------------------------------
 // GATEWAY AUTHENTICATION MIDDLEWARE (/v1/*)
 // -------------------------------------------------------------
@@ -261,16 +307,18 @@ app.post('/v1/chat/completions', async (c) => {
         cached: true,
       });
 
-      broadcastEvent('request_completed', {
+      broadcastEvent('request_completed', buildFlowEvent({
         endpoint: '/v1/chat/completions',
         clientTool,
         model: requestedModel,
-        target: 'cache/local-sqlite',
+        chainName: 'cache',
+        finalTarget: null,
+        attempts: [],
         latencyMs: cachedLatency,
         ttftMs: cachedLatency,
-        failovers: 0,
         cached: true,
-      });
+        success: true,
+      }));
 
       if (!stream) {
         c.header('X-NonStop-Cached', 'true');
@@ -353,14 +401,16 @@ app.post('/v1/chat/completions', async (c) => {
         cached: false,
       });
 
-      broadcastEvent('request_completed', {
+      broadcastEvent('request_completed', buildFlowEvent({
         endpoint: '/v1/chat/completions',
         clientTool,
         model: requestedModel,
-        target: `${result.finalTarget.providerName}/${result.finalTarget.modelId}`,
+        chainName,
+        finalTarget: result.finalTarget,
+        attempts: result.attempts,
         latencyMs,
-        failovers: Math.max(0, result.attempts.length - 1),
-      });
+        success: true,
+      }));
 
       return c.json(json);
     } catch (err: any) {
@@ -505,15 +555,18 @@ app.post('/v1/chat/completions', async (c) => {
           cached: false,
         });
 
-        broadcastEvent('request_completed', {
+        broadcastEvent('request_completed', buildFlowEvent({
           endpoint: '/v1/chat/completions',
           clientTool,
           model: requestedModel,
-          target: finalTarget ? `${finalTarget.providerName}/${finalTarget.modelId}` : requestedModel,
+          chainName,
+          finalTarget,
+          attempts: attemptsHistory,
           latencyMs: totalLatency,
           ttftMs,
-          failovers: Math.max(0, attemptsHistory.length - 1),
-        });
+          cached: false,
+          success: true,
+        }));
 
         return;
       } catch (err: any) {
@@ -634,14 +687,16 @@ app.post('/v1/messages', async (c) => {
         responseBody: anthropicResp,
       });
 
-      broadcastEvent('request_completed', {
+      broadcastEvent('request_completed', buildFlowEvent({
         endpoint: '/v1/messages',
         clientTool,
         model: requestedModel,
-        target: `${result.finalTarget.providerName}/${result.finalTarget.modelId}`,
+        chainName,
+        finalTarget: result.finalTarget,
+        attempts: result.attempts,
         latencyMs,
-        failovers: Math.max(0, result.attempts.length - 1),
-      });
+        success: true,
+      }));
 
       return c.json(anthropicResp);
     } catch (err: any) {
@@ -770,15 +825,17 @@ app.post('/v1/messages', async (c) => {
         stream: true,
       });
 
-      broadcastEvent('request_completed', {
+      broadcastEvent('request_completed', buildFlowEvent({
         endpoint: '/v1/messages',
         clientTool,
         model: requestedModel,
-        target: finalTarget ? `${finalTarget.providerName}/${finalTarget.modelId}` : requestedModel,
+        chainName,
+        finalTarget,
+        attempts: attemptsHistory,
         latencyMs: totalLatency,
         ttftMs,
-        failovers: Math.max(0, attemptsHistory.length - 1),
-      });
+        success: true,
+      }));
     } catch (err: any) {
       try {
         await sseStream.write(`event: error\ndata: ${JSON.stringify({
@@ -847,14 +904,16 @@ app.post('/v1/responses', async (c) => {
         responseBody: responsesApiJson,
       });
 
-      broadcastEvent('request_completed', {
+      broadcastEvent('request_completed', buildFlowEvent({
         endpoint: '/v1/responses',
         clientTool,
         model: requestedModel,
-        target: `${result.finalTarget.providerName}/${result.finalTarget.modelId}`,
+        chainName,
+        finalTarget: result.finalTarget,
+        attempts: result.attempts,
         latencyMs,
-        failovers: Math.max(0, result.attempts.length - 1),
-      });
+        success: true,
+      }));
 
       return c.json(responsesApiJson);
     } catch (err: any) {
@@ -959,11 +1018,10 @@ app.post('/v1/responses', async (c) => {
         promptTokens: pTokens, completionTokens: cTokens, stream: true,
       });
 
-      broadcastEvent('request_completed', {
-        endpoint: '/v1/responses', clientTool, model: requestedModel,
-        target: finalTarget ? `${finalTarget.providerName}/${finalTarget.modelId}` : requestedModel,
-        latencyMs, ttftMs, failovers: Math.max(0, attemptsHistory.length - 1),
-      });
+      broadcastEvent('request_completed', buildFlowEvent({
+        endpoint: '/v1/responses', clientTool, model: requestedModel, chainName,
+        finalTarget, attempts: attemptsHistory, latencyMs, ttftMs, success: true,
+      }));
     } catch (err: any) {
       try {
         await sseStream.write(`event: response.failed\ndata: ${JSON.stringify({
@@ -993,7 +1051,7 @@ app.get('/api/events', async (c) => {
     };
 
     sseClients.add(sender);
-    // Send initial connected event
+    // Send an initial connected event, then keep the stream open with periodic pings.
     await stream.write(`event: connected\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`);
 
     const interval = setInterval(async () => {

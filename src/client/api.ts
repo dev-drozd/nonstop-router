@@ -24,6 +24,14 @@ export function withAdminToken(url: string): string {
   return `${url}${sep}admin_token=${encodeURIComponent(token)}`;
 }
 
+/**
+ * Opens the live event stream. EventSource cannot send custom headers, so the
+ * admin token is passed as a query parameter (same-origin dashboard only).
+ */
+export function openEventStream(): EventSource {
+  return new EventSource(withAdminToken('/api/events'));
+}
+
 export async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const token = getAdminToken();
   const res = await fetch(`${API_BASE}${url}`, {

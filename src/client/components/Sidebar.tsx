@@ -1,7 +1,7 @@
 import React from 'react';
-import { Activity, Server, Cpu, GitFork, Terminal, FileText, Settings, Moon, Sun, Menu, X, Sparkles } from 'lucide-react';
+import { Activity, Server, Cpu, GitFork, Terminal, FileText, Settings, Moon, Sun, Menu, X, Sparkles, Radio } from 'lucide-react';
 
-export type PageId = 'overview' | 'providers' | 'models' | 'chains' | 'connect' | 'logs' | 'settings';
+export type PageId = 'overview' | 'flow' | 'providers' | 'models' | 'chains' | 'connect' | 'logs' | 'settings';
 
 interface SidebarProps {
   activePage: PageId;
@@ -34,6 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const navItems: Array<{ id: PageId; label: string; icon: React.ReactNode }> = [
     { id: 'overview', label: 'Overview', icon: <Activity className="w-4 h-4" /> },
+    { id: 'flow', label: 'Live Flow', icon: <Radio className="w-4 h-4" /> },
     { id: 'providers', label: 'Providers & Keys', icon: <Server className="w-4 h-4" /> },
     { id: 'models', label: 'Models', icon: <Cpu className="w-4 h-4" /> },
     { id: 'chains', label: 'Chains', icon: <GitFork className="w-4 h-4" /> },

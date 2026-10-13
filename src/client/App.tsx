@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useProviders, useOverview, fetchJson } from './api.js';
+import { useProviders, useOverview, fetchJson, openEventStream } from './api.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar, type PageId } from './components/Sidebar.js';
 import { OverviewPage } from './pages/OverviewPage.js';
@@ -9,9 +9,37 @@ import { ChainsPage } from './pages/ChainsPage.js';
 import { ConnectPage } from './pages/ConnectPage.js';
 import { LogsPage } from './pages/LogsPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
+import { FlowPage } from './pages/FlowPage.js';
 import { OnboardingWizard } from './components/OnboardingWizard.js';
 import { PlaygroundDrawer } from './components/PlaygroundDrawer.js';
 import { Menu, Play } from 'lucide-react';
+
+export type LiveFlowEvent = {
+  timestamp: number;
+  endpoint: string;
+  clientTool: string;
+  model: string;
+  chainName: string;
+  finalProviderId: string | null;
+  finalProviderName: string | null;
+  finalKeyId: string | null;
+  target: string | null;
+  latencyMs: number;
+  ttftMs: number | null;
+  failovers: number;
+  attempts: Array<{
+    providerId: string;
+    providerName: string;
+    modelId: string;
+    success: boolean;
+    keyId: string;
+    statusCode: number | null;
+    error: string | null;
+    durationMs: number | null;
+  }>;
+  cached: boolean;
+  success: boolean;
+};
 
 export const App: React.FC = () => {
   const queryClient = useQueryClient();
@@ -24,6 +52,7 @@ export const App: React.FC = () => {
 
   const [playgroundOpen, setPlaygroundOpen] = useState(false);
   const [playgroundModel, setPlaygroundModel] = useState('auto');
+  const [liveEvents, setLiveEvents] = useState<LiveFlowEvent[]>([]);
 
   const openPlayground = (modelId: string = 'auto') => {
     setPlaygroundModel(modelId);
@@ -67,9 +96,14 @@ export const App: React.FC = () => {
 
   // Connect to SSE live updates
   useEffect(() => {
-    const sse = new EventSource('/api/events');
+    const sse = openEventStream();
 
-    sse.addEventListener('request_completed', () => {
+    sse.addEventListener('request_completed', (ev: any) => {
+      let flow: LiveFlowEvent | null = null;
+      try { flow = JSON.parse(ev.data); } catch {}
+      if (flow) {
+        setLiveEvents(prev => [flow as LiveFlowEvent, ...prev].slice(0, 30));
+      }
       queryClient.invalidateQueries({ queryKey: ['overview'] });
       queryClient.invalidateQueries({ queryKey: ['logs'] });
     });
@@ -125,6 +159,7 @@ export const App: React.FC = () => {
         {/* Scrollable Page Body */}
         <main className="flex-1 overflow-y-auto">
           {activePage === 'overview' && <OverviewPage onNavigate={setActivePage} onOpenPlayground={openPlayground} />}
+          {activePage === 'flow' && <FlowPage liveEvents={liveEvents} />}
           {activePage === 'providers' && <ProvidersPage />}
           {activePage === 'models' && <ModelsPage onOpenPlayground={openPlayground} />}
           {activePage === 'chains' && <ChainsPage />}
