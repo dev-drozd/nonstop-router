@@ -25,6 +25,7 @@ export interface ProviderKey {
   lastErrorAt: number | null;
   usageCount: number;
   tokensUsed?: number;
+  disabled?: boolean;
   createdAt: number;
   updatedAt: number;
 }

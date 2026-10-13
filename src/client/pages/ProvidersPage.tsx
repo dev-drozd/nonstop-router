@@ -3,7 +3,7 @@ import { useProviders, fetchJson } from '../api.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { ProviderLogo } from '../components/ProviderLogo.js';
 import { StatusBadge } from '../components/StatusBadge.js';
-import { Server, Plus, Download, Key, Trash2, CheckCircle2, AlertCircle, RefreshCw, Eye, EyeOff, Copy, ShieldAlert, X, Pencil, Sparkles, Zap } from 'lucide-react';
+import { Server, Plus, Download, Key, Trash2, CheckCircle2, AlertCircle, RefreshCw, Eye, EyeOff, Copy, ShieldAlert, X, Pencil, Sparkles, Zap, Power } from 'lucide-react';
 import type { Provider, ProviderProtocol, KeySelectionStrategy } from '../../shared/types.js';
 
 export const ProvidersPage: React.FC = () => {
@@ -357,6 +357,16 @@ export const ProvidersPage: React.FC = () => {
     }
   };
 
+  const handleToggleKeyDisabled = async (keyId: string, currentlyDisabled: boolean) => {
+    try {
+      await fetchJson(`/api/keys/${keyId}/${currentlyDisabled ? 'enable' : 'disable'}`, { method: 'POST' });
+      queryClient.invalidateQueries({ queryKey: ['providers'] });
+      queryClient.invalidateQueries({ queryKey: ['overview'] });
+    } catch (err: any) {
+      alert(`Failed to ${currentlyDisabled ? 'enable' : 'disable'} key: ${err.message}`);
+    }
+  };
+
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -466,16 +476,17 @@ export const ProvidersPage: React.FC = () => {
                       const isRevealed = Boolean(revealedKeys[k.id]);
                       const displayKey = isRevealed ? revealedKeys[k.id] : k.keyMasked;
                       const testState = keyTestStates[k.id];
+                      const isDisabled = Boolean(k.disabled);
 
                       return (
                         <div
                           key={k.id}
-                          className="p-3 rounded-lg bg-bg-surface border border-border-subtle flex flex-col justify-between gap-2.5 transition-all hover:border-border-default"
+                          className={`p-3 rounded-lg bg-bg-surface border border-border-subtle flex flex-col justify-between gap-2.5 transition-all hover:border-border-default ${isDisabled ? 'opacity-60' : ''}`}
                         >
                           <div className="space-y-1 overflow-hidden">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-xs font-semibold text-text-primary truncate">{k.label}</span>
-                              <StatusBadge status={k.status} />
+                              <StatusBadge status={isDisabled ? 'disabled' : k.status} />
                             </div>
 
                             <div className="flex items-center gap-1.5 text-[11px] font-mono text-text-muted">
@@ -547,6 +558,13 @@ export const ProvidersPage: React.FC = () => {
                             </button>
 
                             <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleToggleKeyDisabled(k.id, isDisabled)}
+                                className={`p-1 rounded hover:bg-bg-raised transition-colors ${isDisabled ? 'text-status-healthy hover:text-status-healthy' : 'text-text-muted hover:text-status-warning'}`}
+                                title={isDisabled ? 'Enable key (return to rotation)' : 'Disable key (exclude from rotation)'}
+                              >
+                                <Power className="w-3 h-3" />
+                              </button>
                               <button
                                 onClick={() => handleOpenEditKey(k)}
                                 className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary transition-colors"
@@ -918,7 +936,6 @@ export const ProvidersPage: React.FC = () => {
                     <option value="openai">OpenAI Compatible</option>
                     <option value="anthropic">Anthropic Messages</option>
                     <option value="gemini">Google Gemini</option>
-                    <option value="ollama">Ollama / Local</option>
                   </select>
                 </div>
 
@@ -930,8 +947,8 @@ export const ProvidersPage: React.FC = () => {
                     className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                   >
                     <option value="round-robin">Round Robin</option>
-                    <option value="priority">Priority Order</option>
-                    <option value="fallback">Fallback Only</option>
+                    <option value="fill-first">Fill First</option>
+                    <option value="least-used">Least Used</option>
                   </select>
                 </div>
               </div>

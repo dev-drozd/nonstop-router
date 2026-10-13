@@ -1139,6 +1139,7 @@ app.get('/api/providers', (c) => {
         lastErrorAt: k.last_error_at,
         usageCount: k.usage_count,
         tokensUsed: k.tokens_used || 0,
+        disabled: Boolean(k.disabled),
         createdAt: k.created_at,
         updatedAt: k.updated_at,
       })),
@@ -1300,6 +1301,27 @@ app.post('/api/keys/:id/reset', (c) => {
     WHERE id = ?
   `).run(id);
   return c.json({ success: true });
+});
+
+// Disable Key (excluded from routing until re-enabled; the secret is kept)
+app.post('/api/keys/:id/disable', (c) => {
+  const id = c.req.param('id');
+  const db = getDb();
+  db.prepare('UPDATE provider_keys SET disabled = 1, updated_at = ? WHERE id = ?').run(Date.now(), id);
+  return c.json({ success: true, disabled: true });
+});
+
+// Enable Key (restored to the pool as healthy)
+app.post('/api/keys/:id/enable', (c) => {
+  const id = c.req.param('id');
+  const db = getDb();
+  db.prepare(`
+    UPDATE provider_keys
+    SET disabled = 0, status = 'healthy', cooldown_until = NULL,
+        consecutive_failures = 0, last_error = NULL, updated_at = ?
+    WHERE id = ?
+  `).run(Date.now(), id);
+  return c.json({ success: true, disabled: false });
 });
 
 // Edit Key (Rename or update key string)

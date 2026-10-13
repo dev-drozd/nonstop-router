@@ -5,7 +5,7 @@ import os from 'os';
 import { getDb } from './db.js';
 import { encryptKey, decryptKey, maskKey } from './crypto.js';
 import { lookupModelMetadata } from './models-meta.js';
-import { modelsUrlForBase } from './config.js';
+import { modelsUrlForBase, normalizeProtocol } from './config.js';
 import { isFreeModelId } from '../shared/types.js';
 import type { Provider, ProviderKey, Model, ProviderProtocol, KeySelectionStrategy } from '../shared/types.js';
 
@@ -16,6 +16,7 @@ export async function testProviderConnection(
 ): Promise<{ success: boolean; latencyMs: number; error?: string; modelCount?: number }> {
   const start = Date.now();
   const cleanUrl = (baseUrl || '').replace(/\/+$/, '');
+  const normalizedProtocol = normalizeProtocol(protocol);
 
   try {
     const controller = new AbortController();
@@ -26,14 +27,14 @@ export async function testProviderConnection(
       'Accept': 'application/json',
     };
 
-    if (protocol === 'openai') {
+    if (normalizedProtocol === 'openai') {
       url = modelsUrlForBase(cleanUrl);
       if (rawKey) headers['Authorization'] = `Bearer ${rawKey.trim()}`;
-    } else if (protocol === 'anthropic') {
+    } else if (normalizedProtocol === 'anthropic') {
       url = modelsUrlForBase(cleanUrl);
       headers['anthropic-version'] = '2023-06-01';
       if (rawKey) headers['x-api-key'] = rawKey.trim();
-    } else if (protocol === 'gemini') {
+    } else if (normalizedProtocol === 'gemini') {
       const keyParam = rawKey ? `?key=${encodeURIComponent(rawKey.trim())}` : '';
       url = `${modelsUrlForBase(cleanUrl)}${keyParam}`;
     }
@@ -90,16 +91,17 @@ export async function fetchAndSyncModels(providerId: string): Promise<Model[]> {
 
   const cleanUrl = provider.base_url.replace(/\/+$/, '');
   const headers: Record<string, string> = { 'Accept': 'application/json' };
+  const normalizedProtocol = normalizeProtocol(provider.protocol);
   let url = '';
 
-  if (provider.protocol === 'openai') {
+  if (normalizedProtocol === 'openai') {
     url = modelsUrlForBase(cleanUrl);
     if (rawKey) headers['Authorization'] = `Bearer ${rawKey.trim()}`;
-  } else if (provider.protocol === 'anthropic') {
+  } else if (normalizedProtocol === 'anthropic') {
     url = modelsUrlForBase(cleanUrl);
     headers['anthropic-version'] = '2023-06-01';
     if (rawKey) headers['x-api-key'] = rawKey.trim();
-  } else if (provider.protocol === 'gemini') {
+  } else if (normalizedProtocol === 'gemini') {
     const keyParam = rawKey ? `?key=${encodeURIComponent(rawKey.trim())}` : '';
     url = `${modelsUrlForBase(cleanUrl)}${keyParam}`;
   }

@@ -2,7 +2,7 @@ import React from 'react';
 import type { HealthStatus } from '../../shared/types.js';
 
 interface StatusBadgeProps {
-  status: HealthStatus | 'online' | 'offline';
+  status: HealthStatus | 'online' | 'offline' | 'disabled';
   className?: string;
   showText?: boolean;
 }
@@ -11,7 +11,10 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
   let color = 'bg-status-healthy text-[#2F9E44] border-[rgba(47,158,68,0.25)]';
   let label = 'Healthy';
 
-  if (status === 'cooling_down') {
+  if (status === 'disabled') {
+    color = 'bg-bg-raised text-text-muted border-border-default';
+    label = 'Disabled';
+  } else if (status === 'cooling_down') {
     color = 'bg-status-warning text-[#F59F00] border-[rgba(245,159,0,0.25)]';
     label = 'Cooling Down';
   } else if (status === 'down' || status === 'offline') {

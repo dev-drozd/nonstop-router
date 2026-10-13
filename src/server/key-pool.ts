@@ -2,6 +2,20 @@ import { getDb, getSettings } from './db.js';
 import { decryptKey } from './crypto.js';
 import type { HealthStatus, KeySelectionStrategy } from '../shared/types.js';
 
+const VALID_STRATEGIES: KeySelectionStrategy[] = ['fill-first', 'round-robin', 'least-used'];
+
+/**
+ * Normalizes a strategy read from the database. Older UI versions could store
+ * values the engine never implemented (e.g. "priority", "fallback"); those
+ * safely fall back to round-robin instead of silently misbehaving.
+ */
+export function normalizeStrategy(strategy: unknown): KeySelectionStrategy {
+  if (typeof strategy === 'string' && (VALID_STRATEGIES as string[]).includes(strategy)) {
+    return strategy as KeySelectionStrategy;
+  }
+  return 'round-robin';
+}
+
 export interface DecryptedKey {
   id: string;
   providerId: string;
@@ -57,13 +71,14 @@ export function parseRetryAfterMs(headers: Headers): number | null {
 export function getAvailableKeysForProvider(providerId: string, strategy: KeySelectionStrategy): DecryptedKey[] {
   const db = getDb();
   const now = Date.now();
+  const normalized = normalizeStrategy(strategy);
 
-  // Retrieve all keys for provider
+  // Retrieve all keys for provider, excluding user-disabled keys
   const rows = db.prepare(`
     SELECT id, provider_id, label, key_encrypted, key_masked, status,
            cooldown_until, consecutive_failures, usage_count
     FROM provider_keys
-    WHERE provider_id = ?
+    WHERE provider_id = ? AND COALESCE(disabled, 0) = 0
   `).all(providerId) as any[];
 
   if (rows.length === 0) return [];
@@ -105,7 +120,7 @@ export function getAvailableKeysForProvider(providerId: string, strategy: KeySel
 
   // Sort keys deterministically. Round-robin rotation is applied by the router
   // engine at dispatch time; least-used sorts by usage here.
-  if (strategy === 'least-used') {
+  if (normalized === 'least-used') {
     return validKeys.sort((a, b) => a.usageCount - b.usageCount);
   }
   // fill-first and round-robin both preserve insertion order at this layer.
@@ -113,8 +128,23 @@ export function getAvailableKeysForProvider(providerId: string, strategy: KeySel
 }
 
 /**
- * Records per-key token usage for cost/accounting views.
+ * Human-readable explanation for why a provider has no usable keys right now.
+ * Used in failover attempt records so users can tell "disabled" apart from "down".
  */
+export function describeKeyShortage(providerId: string): string {
+  try {
+    const db = getDb();
+    const total = (db.prepare('SELECT COUNT(*) as c FROM provider_keys WHERE provider_id = ?').get(providerId) as any).c;
+    if (!total) return 'No keys configured for this provider';
+    const disabledCount = (db.prepare('SELECT COUNT(*) as c FROM provider_keys WHERE provider_id = ? AND COALESCE(disabled, 0) = 1').get(providerId) as any).c;
+    if (disabledCount === total) {
+      return total === 1 ? 'The only key is disabled by the user' : `All ${total} keys are disabled by the user`;
+    }
+    return 'No available healthy keys (all down or cooling down)';
+  } catch {
+    return 'No available healthy keys';
+  }
+}
 export function addKeyTokens(keyId: string, tokens: number): void {
   if (!keyId || !Number.isFinite(tokens) || tokens <= 0) return;
   const db = getDb();

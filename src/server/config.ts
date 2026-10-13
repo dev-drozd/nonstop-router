@@ -1,6 +1,19 @@
+import type { KeySelectionStrategy, ProviderProtocol } from '../shared/types.js';
+
+const VALID_PROTOCOLS: ProviderProtocol[] = ['openai', 'anthropic', 'gemini'];
+
 /**
- * Shared configuration helpers used by the server, CLI, and connect/config writers.
+ * Normalizes a protocol read from the database. Older UI versions could store
+ * "ollama" (which speaks the OpenAI-compatible API); it maps to "openai".
+ * Anything else unknown also falls back to "openai" rather than crashing dispatch.
  */
+export function normalizeProtocol(protocol: unknown): ProviderProtocol {
+  if (protocol === 'ollama' || protocol === 'lmstudio') return 'openai';
+  if (typeof protocol === 'string' && (VALID_PROTOCOLS as string[]).includes(protocol)) {
+    return protocol as ProviderProtocol;
+  }
+  return 'openai';
+}
 
 /**
  * Resolve the port the gateway should bind to.

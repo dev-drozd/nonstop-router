@@ -69,6 +69,7 @@ function initSchema(db: Database.Database): void {
       usage_count INTEGER NOT NULL DEFAULT 0,
       tokens_used INTEGER NOT NULL DEFAULT 0,
       last_used_at INTEGER,
+      disabled INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -196,6 +197,15 @@ function initSchema(db: Database.Database): void {
   if (keyCols.length && !keyCols.includes('last_used_at')) {
     db.exec('ALTER TABLE provider_keys ADD COLUMN last_used_at INTEGER');
   }
+  if (keyCols.length && !keyCols.includes('disabled')) {
+    db.exec('ALTER TABLE provider_keys ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');
+  }
+
+  // Repair values older UI versions could store that the engine never implemented.
+  try {
+    db.exec(`UPDATE providers SET selection_strategy = 'round-robin' WHERE selection_strategy NOT IN ('round-robin', 'fill-first', 'least-used')`);
+    db.exec(`UPDATE providers SET protocol = 'openai' WHERE protocol IN ('ollama', 'lmstudio')`);
+  } catch {}
 
   const logCols = tableColumns(db, 'request_logs');
   if (logCols.length && !logCols.includes('money_saved_usd')) {

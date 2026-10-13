@@ -22,6 +22,7 @@ function getStatements(db: Database.Database) {
       SELECT id, provider_id, label
       FROM provider_keys
       WHERE status = 'cooling_down' AND cooldown_until IS NOT NULL AND cooldown_until <= ?
+        AND COALESCE(disabled, 0) = 0
     `);
     stmts.recoverKey = db.prepare("UPDATE provider_keys SET status = 'healthy', cooldown_until = NULL WHERE id = ?");
     stmts.getCandidates = db.prepare(`
@@ -29,7 +30,7 @@ function getStatements(db: Database.Database) {
              p.name as provider_name, p.protocol, p.base_url
       FROM provider_keys pk
       JOIN providers p ON pk.provider_id = p.id
-      WHERE pk.status IN ('down', 'cooling_down')
+      WHERE pk.status IN ('down', 'cooling_down') AND COALESCE(pk.disabled, 0) = 0
     `);
     stmts.markHealthy = db.prepare(`
       UPDATE provider_keys

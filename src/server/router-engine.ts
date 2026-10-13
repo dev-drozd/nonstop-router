@@ -1,7 +1,8 @@
 import crypto from 'crypto';
 import { getDb, getSettings } from './db.js';
-import { getAvailableKeysForProvider, markKeySuccess, markKeyFailure, parseRetryAfterMs, type DecryptedKey } from './key-pool.js';
+import { getAvailableKeysForProvider, normalizeStrategy, describeKeyShortage, markKeySuccess, markKeyFailure, parseRetryAfterMs, type DecryptedKey } from './key-pool.js';
 import { recordKeyRequest, shouldThrottleKey } from './rate-governor.js';
+import { normalizeProtocol } from './config.js';
 import { translateOpenAIToGemini, translateGeminiToOpenAI, chatCompletionToSSE, translateOpenAIToAnthropicRequest, translateAnthropicResponseToOpenAI } from './protocol-translator.js';
 import type { ChainMode, TargetAttempt } from '../shared/types.js';
 
@@ -224,8 +225,9 @@ export async function executeWithFailover(
   }
 
   for (const target of targets) {
-    const available = getAvailableKeysForProvider(target.providerId, target.selectionStrategy);
-    let candidateKeys = rotateKeys(target.providerId, available, target.selectionStrategy);
+    const strategy = normalizeStrategy(target.selectionStrategy);
+    const available = getAvailableKeysForProvider(target.providerId, strategy);
+    let candidateKeys = rotateKeys(target.providerId, available, strategy);
 
     // Rate governor: when enabled, deprioritize keys that have hit their rolling
     // RPM ceiling so we rotate before the upstream returns a 429. If every key is
@@ -247,7 +249,7 @@ export async function executeWithFailover(
         modelId: target.modelId,
         keyId: 'none',
         success: false,
-        error: 'No available healthy keys (all down or cooling down)',
+        error: describeKeyShortage(target.providerId),
         durationMs: 0,
       });
       continue;
@@ -275,17 +277,19 @@ export async function executeWithFailover(
           'Accept': headerResponseMode ? 'text/event-stream' : 'application/json',
         };
 
-        if (target.providerProtocol === 'openai') {
+        const protocol = normalizeProtocol(target.providerProtocol);
+
+        if (protocol === 'openai') {
           targetUrl = `${cleanBase}/chat/completions`;
           if (key.rawKey) headers['Authorization'] = `Bearer ${key.rawKey.trim()}`;
-        } else if (target.providerProtocol === 'anthropic') {
+        } else if (protocol === 'anthropic') {
           targetUrl = `${cleanBase}/messages`;
           headers['anthropic-version'] = '2023-06-01';
           if (key.rawKey) headers['x-api-key'] = key.rawKey.trim();
           // Anthropic has no OpenAI-compatible stream; always request JSON so the
           // engine can translate it into an OpenAI-shaped response/stream.
           targetPayload.stream = false;
-        } else if (target.providerProtocol === 'gemini') {
+        } else if (protocol === 'gemini') {
           // Gemini streaming uses a different SSE shape; always fetch non-streaming
           // and synthesize an OpenAI-compatible stream for the client when needed.
           const keyParam = key.rawKey ? `?key=${encodeURIComponent(key.rawKey.trim())}` : '';
@@ -299,9 +303,9 @@ export async function executeWithFailover(
 
         // Anthropic-native upstream: translate the OpenAI payload to the Messages API.
         const requestBody =
-          target.providerProtocol === 'gemini'
+          protocol === 'gemini'
             ? JSON.stringify(translateOpenAIToGemini(targetPayload))
-            : target.providerProtocol === 'anthropic'
+            : protocol === 'anthropic'
               ? JSON.stringify(translateOpenAIToAnthropicRequest(targetPayload))
               : JSON.stringify(targetPayload);
 
@@ -345,10 +349,10 @@ export async function executeWithFailover(
         // Normalize non-OpenAI upstream responses into OpenAI-shaped Responses so every
         // downstream endpoint handler can treat all targets identically.
         let finalResponse = res;
-        if (target.providerProtocol !== 'openai') {
+        if (protocol !== 'openai') {
           const upstreamJson = await res.json().catch(() => null);
           if (!upstreamJson) {
-            const msg = `${target.providerProtocol} returned a non-JSON body`;
+            const msg = `${protocol} returned a non-JSON body`;
             markKeyFailure(key.id, 502, msg);
             attempts.push({
               providerId: target.providerId,
@@ -362,7 +366,7 @@ export async function executeWithFailover(
             });
             continue;
           }
-          const openAiJson = target.providerProtocol === 'gemini'
+          const openAiJson = protocol === 'gemini'
             ? translateGeminiToOpenAI(upstreamJson, target.modelId)
             : translateAnthropicResponseToOpenAI(upstreamJson, target.modelId);
           finalResponse = new Response(
