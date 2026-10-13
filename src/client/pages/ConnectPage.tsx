@@ -9,8 +9,8 @@ export const ConnectPage: React.FC = () => {
 
   const { data: connectData, isLoading } = useConnectConfigs(selectedChain);
 
-  // OpenCode writer modal
-  const [showWriterModal, setShowWriterModal] = useState(false);
+  // One-click writer modal state
+  const [activeWriterTool, setActiveWriterTool] = useState<{ id: string; name: string; endpoint: string } | null>(null);
   const [writerPreview, setWriterPreview] = useState<any>(null);
   const [writingStatus, setWritingStatus] = useState<string | null>(null);
 
@@ -20,11 +20,16 @@ export const ConnectPage: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handlePreviewOpenCodeWrite = async () => {
-    setShowWriterModal(true);
+  const handlePreviewWrite = async (toolId: string, toolName: string) => {
+    const endpoint = toolId === 'continue' ? '/api/connect/continue-write'
+      : toolId === 'aider' ? '/api/connect/aider-write'
+      : '/api/connect/opencode-write';
+    
+    setActiveWriterTool({ id: toolId, name: toolName, endpoint });
     setWritingStatus(null);
+    setWriterPreview(null);
     try {
-      const res = await fetchJson<any>('/api/connect/opencode-write', {
+      const res = await fetchJson<any>(endpoint, {
         method: 'POST',
         body: JSON.stringify({ chainName: selectedChain, execute: false }),
       });
@@ -34,10 +39,11 @@ export const ConnectPage: React.FC = () => {
     }
   };
 
-  const handleExecuteOpenCodeWrite = async () => {
+  const handleExecuteWrite = async () => {
+    if (!activeWriterTool) return;
     setWritingStatus('writing');
     try {
-      const res = await fetchJson<any>('/api/connect/opencode-write', {
+      const res = await fetchJson<any>(activeWriterTool.endpoint, {
         method: 'POST',
         body: JSON.stringify({ chainName: selectedChain, execute: true }),
       });
@@ -130,16 +136,16 @@ export const ConnectPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Special One-Click Action for OpenCode */}
-            {tool.id === 'opencode' && (
+            {/* Automated One-Click Action for OpenCode, Continue, and Aider */}
+            {(tool.id === 'opencode' || tool.id === 'continue' || tool.id === 'aider') && (
               <div className="p-3 bg-bg-raised/40 border-t border-border-subtle flex items-center justify-between">
                 <span className="text-xs font-medium text-text-secondary">Automated Integration</span>
                 <button
-                  onClick={handlePreviewOpenCodeWrite}
+                  onClick={() => handlePreviewWrite(tool.id, tool.name)}
                   className="flex items-center gap-1.5 px-3 py-1 rounded bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors shadow-subtle"
                 >
                   <FileEdit className="w-3.5 h-3.5" />
-                  <span>Write to OpenCode Config</span>
+                  <span>Configure {tool.name}</span>
                 </button>
               </div>
             )}
@@ -147,12 +153,12 @@ export const ConnectPage: React.FC = () => {
         ))}
       </div>
 
-      {/* OpenCode Writer Diff & Confirmation Modal */}
-      {showWriterModal && (
+      {/* Configuration Writer Diff & Confirmation Modal */}
+      {activeWriterTool && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/60" onClick={() => setShowWriterModal(false)} />
+          <div className="fixed inset-0 bg-black/60" onClick={() => setActiveWriterTool(null)} />
           <div className="relative z-10 w-full max-w-2xl rounded-md bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
-            <h2 className="text-base font-semibold text-text-primary">Write to OpenCode Configuration</h2>
+            <h2 className="text-base font-semibold text-text-primary">Configure {activeWriterTool.name}</h2>
 
             {writerPreview ? (
               <div className="space-y-3">
@@ -177,7 +183,7 @@ export const ConnectPage: React.FC = () => {
                 {writingStatus === 'done' && (
                   <div className="p-2.5 rounded bg-status-healthy-bg border border-[rgba(47,158,68,0.25)] flex items-center gap-2 text-xs text-status-healthy">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>Configuration successfully updated and backed up! OpenCode is now pointed at NonStop Router.</span>
+                    <span>Configuration successfully updated and backed up. {activeWriterTool.name} is now pointed at NonStop Router.</span>
                   </div>
                 )}
               </div>
@@ -188,7 +194,7 @@ export const ConnectPage: React.FC = () => {
             <div className="flex justify-end gap-2 pt-3 border-t border-border-subtle">
               <button
                 type="button"
-                onClick={() => setShowWriterModal(false)}
+                onClick={() => setActiveWriterTool(null)}
                 className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
               >
                 Close
@@ -196,7 +202,7 @@ export const ConnectPage: React.FC = () => {
               {writingStatus !== 'done' && (
                 <button
                   type="button"
-                  onClick={handleExecuteOpenCodeWrite}
+                  onClick={handleExecuteWrite}
                   disabled={writingStatus === 'writing'}
                   className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
                 >

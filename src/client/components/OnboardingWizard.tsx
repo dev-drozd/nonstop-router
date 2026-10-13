@@ -1,13 +1,36 @@
 import React, { useState } from 'react';
 import { fetchJson } from '../api.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ArrowRight, Download, Server, Terminal, Copy, Check } from 'lucide-react';
+import { ModelLogo, detectModelFamily } from './ModelLogo.js';
+import {
+  X,
+  Server,
+  Globe,
+  Key,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  ArrowRight,
+  Download,
+  Copy,
+  Check,
+  Sparkles,
+} from 'lucide-react';
 
 interface OnboardingWizardProps {
   onComplete: () => void;
+  onClose?: () => void;
 }
 
-export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
+const PRESETS = [
+  { name: 'Token Harbor', url: 'https://tokenharbor.ai/v1', placeholder: 'thk_...' },
+  { name: 'OpenAI', url: 'https://api.openai.com/v1', placeholder: 'sk-...' },
+  { name: 'Anthropic', url: 'https://api.anthropic.com/v1', placeholder: 'sk-ant-...' },
+  { name: 'Groq', url: 'https://api.groq.com/openai/v1', placeholder: 'gsk_...' },
+  { name: 'Ollama (Local)', url: 'http://127.0.0.1:11434/v1', placeholder: 'ollama' },
+];
+
+export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, onClose }) => {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -18,6 +41,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
   const [manualName, setManualName] = useState('Token Harbor');
   const [manualUrl, setManualUrl] = useState('https://tokenharbor.ai/v1');
   const [manualKey, setManualKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
 
   // Step 2: Auto-discovered models
   const [discoveredModels, setDiscoveredModels] = useState<any[]>([]);
@@ -28,6 +52,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [gatewayKey, setGatewayKey] = useState('nsk_live_YOUR_KEY');
+
+  const handleDismiss = () => {
+    if (onClose) {
+      onClose();
+    } else {
+      onComplete();
+    }
+  };
 
   React.useEffect(() => {
     // Check for OpenCode import candidates on mount
@@ -42,13 +74,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
       })
       .catch(() => setProviderType('manual'));
 
-    // Fetch gateway key
-    fetchJson<any>('/api/connect/configs?chain=auto')
+    // Fetch the local gateway key for the sample snippet (admin-protected, local-only)
+    fetchJson<any>('/api/gateway-key')
       .then(res => {
-        if (res.gatewayKey) setGatewayKey(res.gatewayKey);
+        if (res.rawKey) setGatewayKey(res.rawKey);
       })
       .catch(() => {});
   }, []);
+
+  const selectPreset = (p: typeof PRESETS[0]) => {
+    setManualName(p.name);
+    setManualUrl(p.url);
+    if (p.name === 'Ollama (Local)' && !manualKey) {
+      setManualKey('ollama');
+    }
+  };
 
   const handleStep1Submit = async () => {
     setIsSubmitting(true);
@@ -58,10 +98,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
           method: 'POST',
           body: JSON.stringify({ providerKey: selectedCandidate }),
         });
-        // Fetch discovered models
         const models = await fetchJson<any[]>(`/api/models?providerId=${res.provider.id}`);
         setDiscoveredModels(models);
-        setSelectedModels(models.slice(0, 3).map(m => m.modelId));
+
+        // Prioritize free models first
+        const freeModels = models.filter(m => detectModelFamily(m.modelId).isFree).map(m => m.modelId);
+        if (freeModels.length > 0) {
+          setSelectedModels(freeModels.slice(0, 4));
+        } else {
+          setSelectedModels(models.slice(0, 3).map(m => m.modelId));
+        }
       } else {
         const res = await fetchJson<any>('/api/providers', {
           method: 'POST',
@@ -75,7 +121,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
         });
         const models = await fetchJson<any[]>(`/api/models?providerId=${res.providerId}`);
         setDiscoveredModels(models);
-        setSelectedModels(models.slice(0, 3).map(m => m.modelId));
+
+        // Prioritize free models first
+        const freeModels = models.filter(m => detectModelFamily(m.modelId).isFree).map(m => m.modelId);
+        if (freeModels.length > 0) {
+          setSelectedModels(freeModels.slice(0, 4));
+        } else {
+          setSelectedModels(models.slice(0, 3).map(m => m.modelId));
+        }
       }
       setStep(2);
     } catch (err: any) {
@@ -88,11 +141,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
   const handleStep2Submit = async () => {
     setIsSubmitting(true);
     try {
-      // Find chain
       const chains = await fetchJson<any[]>('/api/chains');
       const autoChain = chains.find(c => c.name === chainName) || chains[0];
       if (autoChain && selectedModels.length > 0) {
-        // Map selected models to provider
         const provs = await fetchJson<any[]>('/api/providers');
         const primaryProv = provs[0];
         const targets = selectedModels.map(mId => ({
@@ -122,20 +173,44 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
   const sampleSnippet = `export ANTHROPIC_BASE_URL="http://127.0.0.1:4000"\nexport ANTHROPIC_AUTH_TOKEN="${gatewayKey}"\nexport ANTHROPIC_MODEL="${chainName}"`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75">
-      <div className="w-full max-w-xl rounded-md bg-bg-surface border border-border-default p-6 shadow-overlay space-y-6">
-        {/* Progress indicator */}
-        <div className="flex items-center justify-between border-b border-border-subtle pb-4">
-          <div>
-            <div className="text-sm font-semibold text-text-primary">Welcome to NonStop Router</div>
-            <div className="text-xs text-text-secondary">First-run setup in under 2 minutes</div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-modal">
+      <div className="w-full max-w-xl rounded-xl bg-bg-surface border border-border-default p-6 shadow-overlay space-y-5">
+        {/* Modal Brand Header */}
+        <div className="flex flex-col items-center justify-center pt-1 pb-3 border-b border-border-subtle relative">
+          <button
+            onClick={handleDismiss}
+            className="absolute right-0 top-0 p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-raised transition-colors"
+            title="Close (Skip for now)"
+            aria-label="Close setup modal"
+          >
+            <X className="w-4 h-4" />
+          </button>
+
+          {/* Theme-adaptive Stacked Brand Logo */}
+          <div className="mb-2">
+            <img
+              src="/assets/logo-stacked.svg"
+              alt="NonStop Router"
+              className="h-14 hidden dark:block mx-auto"
+            />
+            <img
+              src="/assets/logo-stacked-on-light.svg"
+              alt="NonStop Router"
+              className="h-14 block dark:hidden mx-auto"
+            />
           </div>
-          <div className="flex items-center gap-1.5 font-mono text-xs">
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-accent text-white' : 'bg-bg-raised text-text-muted'}`}>1</span>
-            <span className="text-text-muted">&bull;</span>
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-accent text-white' : 'bg-bg-raised text-text-muted'}`}>2</span>
-            <span className="text-text-muted">&bull;</span>
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-accent text-white' : 'bg-bg-raised text-text-muted'}`}>3</span>
+
+          <p className="text-xs text-text-secondary text-center max-w-sm">
+            High-availability gateway with automated failover for AI coding tools.
+          </p>
+
+          {/* Step indicators */}
+          <div className="flex items-center gap-1.5 font-mono text-xs mt-3">
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center font-medium ${step >= 1 ? 'bg-accent text-white' : 'bg-bg-raised text-text-muted'}`}>1</span>
+            <span className="text-border-strong">&bull;</span>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center font-medium ${step >= 2 ? 'bg-accent text-white' : 'bg-bg-raised text-text-muted'}`}>2</span>
+            <span className="text-border-strong">&bull;</span>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center font-medium ${step >= 3 ? 'bg-accent text-white' : 'bg-bg-raised text-text-muted'}`}>3</span>
           </div>
         </div>
 
@@ -146,28 +221,49 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
               Step 1: Choose how to connect your first LLM provider.
             </div>
 
+            {/* OpenCode Import Option */}
             {importCandidates.length > 0 && (
-              <div className="p-3 rounded bg-bg-raised border border-border-subtle space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer font-medium text-xs text-text-primary">
+              <div
+                onClick={() => setProviderType('import')}
+                className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
+                  providerType === 'import'
+                    ? 'bg-accent-subtle/40 border-accent-border ring-1 ring-accent/30'
+                    : 'bg-bg-raised border-border-default hover:border-border-strong'
+                }`}
+              >
+                <label className="flex items-start gap-2.5 cursor-pointer font-medium text-xs text-text-primary">
                   <input
                     type="radio"
                     name="providerSource"
                     checked={providerType === 'import'}
                     onChange={() => setProviderType('import')}
-                    className="text-accent focus:ring-accent"
+                    className="mt-0.5 text-accent focus:ring-accent"
                   />
-                  <span>Import from OpenCode Configuration (Recommended)</span>
-                </label>
-                {providerType === 'import' && (
-                  <div className="pl-6 text-xs text-text-secondary">
-                    Detected existing provider: <strong className="text-text-primary">{importCandidates[0]?.name}</strong> ({importCandidates[0]?.modelCount} models, key found).
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">Import from OpenCode Configuration</span>
+                      <span className="px-1.5 py-0.2 rounded text-[10px] bg-status-healthy/15 text-status-healthy font-normal">Detected</span>
+                    </div>
+                    <div className="text-[11px] text-text-secondary mt-1">
+                      Found provider: <strong className="text-text-primary">{importCandidates[0]?.name}</strong> ({importCandidates[0]?.modelCount} models, API key ready).
+                    </div>
                   </div>
-                )}
+                </label>
               </div>
             )}
 
-            <div className="p-3 rounded bg-bg-raised border border-border-subtle space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer font-medium text-xs text-text-primary">
+            {/* Manual Provider Option */}
+            <div
+              className={`p-3.5 rounded-lg border transition-all ${
+                providerType === 'manual'
+                  ? 'bg-bg-surface border-border-strong'
+                  : 'bg-bg-raised border-border-default'
+              }`}
+            >
+              <label
+                onClick={() => setProviderType('manual')}
+                className="flex items-center gap-2.5 cursor-pointer font-medium text-xs text-text-primary mb-3"
+              >
                 <input
                   type="radio"
                   name="providerSource"
@@ -175,48 +271,106 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                   onChange={() => setProviderType('manual')}
                   className="text-accent focus:ring-accent"
                 />
-                <span>Configure Provider Manually</span>
+                <span className="font-semibold">Configure Provider Manually</span>
               </label>
 
               {providerType === 'manual' && (
-                <div className="space-y-3 pt-2 pl-6">
+                <div className="space-y-3.5 pt-1 pl-6">
+                  {/* Quick Presets */}
                   <div>
-                    <label className="block text-[11px] text-text-muted mb-0.5">Provider Name</label>
+                    <div className="text-[11px] text-text-muted mb-1.5">Quick Presets:</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {PRESETS.map(p => (
+                        <button
+                          key={p.name}
+                          type="button"
+                          onClick={() => selectPreset(p)}
+                          className={`px-2 py-1 text-[11px] rounded-md border transition-colors ${
+                            manualName === p.name
+                              ? 'bg-accent text-white border-accent'
+                              : 'bg-bg-raised text-text-secondary border-border-default hover:text-text-primary hover:border-border-strong'
+                          }`}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Provider Name */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-secondary mb-1">
+                      <Server className="w-3.5 h-3.5 text-text-muted" />
+                      <span>Provider Name</span>
+                    </label>
                     <input
                       type="text"
                       value={manualName}
                       onChange={e => setManualName(e.target.value)}
-                      className="w-full px-2.5 py-1 text-xs rounded bg-bg-base border border-border-default focus:border-accent text-text-primary"
+                      placeholder="e.g. Token Harbor, Groq, DeepSeek"
+                      className="w-full"
                     />
                   </div>
+
+                  {/* Base URL */}
                   <div>
-                    <label className="block text-[11px] text-text-muted mb-0.5">Base URL</label>
+                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-secondary mb-1">
+                      <Globe className="w-3.5 h-3.5 text-text-muted" />
+                      <span>Base URL</span>
+                    </label>
                     <input
                       type="text"
                       value={manualUrl}
                       onChange={e => setManualUrl(e.target.value)}
-                      className="w-full px-2.5 py-1 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent text-text-primary"
+                      placeholder="https://api.example.com/v1"
+                      className="w-full font-mono text-xs"
                     />
                   </div>
+
+                  {/* API Key with Show/Hide Toggle */}
                   <div>
-                    <label className="block text-[11px] text-text-muted mb-0.5">API Key</label>
-                    <input
-                      type="password"
-                      value={manualKey}
-                      onChange={e => setManualKey(e.target.value)}
-                      placeholder="sk-... or thk_..."
-                      className="w-full px-2.5 py-1 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent text-text-primary"
-                    />
+                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-secondary mb-1">
+                      <Key className="w-3.5 h-3.5 text-text-muted" />
+                      <span>API Key</span>
+                      <span className="text-text-muted text-[10px] font-normal">(Encrypted with AES-256-GCM)</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showKey ? 'text' : 'password'}
+                        value={manualKey}
+                        onChange={e => setManualKey(e.target.value)}
+                        placeholder="sk-... or thk_..."
+                        className="w-full font-mono text-xs pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowKey(!showKey)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-1"
+                        title={showKey ? 'Hide key' : 'Show key'}
+                      >
+                        {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end pt-2">
+            {/* Step 1 Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
               <button
+                type="button"
+                onClick={handleDismiss}
+                className="text-xs text-text-muted hover:text-text-primary transition-colors underline-offset-4 hover:underline"
+              >
+                Skip for now & explore dashboard
+              </button>
+
+              <button
+                type="button"
                 onClick={handleStep1Submit}
-                disabled={isSubmitting}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
+                disabled={isSubmitting || (providerType === 'manual' && !manualUrl.trim())}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
               >
                 <span>{isSubmitting ? 'Connecting...' : 'Connect & Fetch Models'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -228,16 +382,30 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
         {/* STEP 2: Pick Models & Set Chain */}
         {step === 2 && (
           <div className="space-y-4">
-            <div className="text-xs text-text-secondary">
-              Step 2: Models automatically discovered ({discoveredModels.length} models). Choose your primary targets for the default <code className="font-mono text-text-primary">auto</code> chain:
+            <div className="flex items-center justify-between text-xs text-text-secondary">
+              <span>
+                Step 2: Discovered <strong className="text-text-primary">{discoveredModels.length} models</strong>. Choose targets for your default <code className="font-mono text-text-primary">auto</code> chain:
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const free = discoveredModels.filter(m => detectModelFamily(m.modelId).isFree).map(m => m.modelId);
+                  if (free.length > 0) setSelectedModels(free);
+                }}
+                className="flex items-center gap-1 text-[11px] text-status-healthy hover:underline"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Select Free Only</span>
+              </button>
             </div>
 
-            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
-              {discoveredModels.slice(0, 15).map(m => {
+            <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+              {discoveredModels.map(m => {
                 const isSelected = selectedModels.includes(m.modelId);
+                const { isFree } = detectModelFamily(m.modelId);
                 return (
                   <div
-                    key={m.id}
+                    key={m.id || m.modelId}
                     onClick={() => {
                       if (isSelected) {
                         setSelectedModels(selectedModels.filter(id => id !== m.modelId));
@@ -245,29 +413,53 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                         setSelectedModels([...selectedModels, m.modelId]);
                       }
                     }}
-                    className={`p-2.5 rounded border text-xs cursor-pointer flex items-center justify-between transition-colors ${
+                    className={`p-2.5 rounded-lg border text-xs cursor-pointer flex items-center justify-between transition-all ${
                       isSelected
-                        ? 'bg-accent-subtle border-accent-border text-text-primary'
-                        : 'bg-bg-raised border-border-subtle text-text-secondary hover:text-text-primary'
+                        ? 'bg-accent-subtle/50 border-accent-border text-text-primary shadow-sm'
+                        : 'bg-bg-raised border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong'
                     }`}
                   >
-                    <span className="font-mono">{m.modelId}</span>
-                    {isSelected && <CheckCircle2 className="w-4 h-4 text-accent" />}
+                    <div className="flex items-center gap-2.5">
+                      <ModelLogo modelId={m.modelId} size={18} />
+                      <span className="font-mono text-xs">{m.modelId}</span>
+                      {isFree && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-status-healthy/15 text-status-healthy border border-status-healthy/30 uppercase tracking-wider">
+                          FREE
+                        </span>
+                      )}
+                    </div>
+                    {isSelected ? (
+                      <CheckCircle2 className="w-4 h-4 text-accent" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border border-border-default" />
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            <div className="flex justify-between items-center pt-2">
-              <span className="text-xs text-text-muted">{selectedModels.length} targets selected</span>
+            {/* Step 2 Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
               <button
-                onClick={handleStep2Submit}
-                disabled={isSubmitting || selectedModels.length === 0}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
+                type="button"
+                onClick={handleDismiss}
+                className="text-xs text-text-muted hover:text-text-primary transition-colors underline-offset-4 hover:underline"
               >
-                <span>Save Chain & Continue</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                Skip for now
               </button>
+
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-text-muted">{selectedModels.length} targets selected</span>
+                <button
+                  type="button"
+                  onClick={handleStep2Submit}
+                  disabled={isSubmitting || selectedModels.length === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
+                >
+                  <span>Save Chain & Continue</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -279,7 +471,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
               Step 3: Setup complete! Copy your tool configuration snippet or start routing now.
             </div>
 
-            <div className="relative rounded bg-bg-base border border-border-subtle p-3">
+            <div className="relative rounded-lg bg-bg-base border border-border-default p-3.5">
               <pre className="text-[11px] font-mono text-text-primary whitespace-pre pr-8 overflow-x-auto">
                 {sampleSnippet}
               </pre>
@@ -289,19 +481,24 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                   setCopiedSnippet(true);
                   setTimeout(() => setCopiedSnippet(false), 2000);
                 }}
-                className="absolute right-2 top-2 p-1.5 rounded bg-bg-raised text-text-muted hover:text-text-primary border border-border-subtle"
+                className="absolute right-2.5 top-2.5 p-1.5 rounded bg-bg-raised text-text-muted hover:text-text-primary border border-border-default transition-colors"
                 title="Copy snippet"
               >
                 {copiedSnippet ? <Check className="w-3.5 h-3.5 text-status-healthy" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
+              <div className="text-xs text-status-healthy flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Router is fully operational</span>
+              </div>
               <button
+                type="button"
                 onClick={handleFinish}
-                className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle"
+                className="px-5 py-2 text-xs font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle"
               >
-                Go to Dashboard
+                Open Dashboard
               </button>
             </div>
           </div>

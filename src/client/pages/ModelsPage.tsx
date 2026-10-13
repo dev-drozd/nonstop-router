@@ -1,21 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useModels, useProviders, fetchJson } from '../api.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { ProviderLogo } from '../components/ProviderLogo.js';
-import { Search, RefreshCw, Wrench, Eye, Check, X, Filter } from 'lucide-react';
+import { ModelLogo, detectModelFamily } from '../components/ModelLogo.js';
+import { Search, RefreshCw, Wrench, Eye, Zap, Sparkles, Check, CheckCheck, Play, Copy, Star, Terminal } from 'lucide-react';
 import type { Model } from '../../shared/types.js';
+import { isFreeModelId } from '../../shared/types.js';
 
-export const ModelsPage: React.FC = () => {
+interface ModelsPageProps {
+  onOpenPlayground?: (modelId: string) => void;
+}
+
+export const ModelsPage: React.FC<ModelsPageProps> = ({ onOpenPlayground }) => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<string>('');
+  const [filterFreeOnly, setFilterFreeOnly] = useState(false);
   const [filterToolsOnly, setFilterToolsOnly] = useState(false);
   const [refreshingProvider, setRefreshingProvider] = useState<string | null>(null);
+  const [defaultModel, setDefaultModel] = useState<string>('auto');
+  const [syncingOpenCode, setSyncingOpenCode] = useState(false);
+
+  useEffect(() => {
+    fetchJson<any>('/api/models/default').then(res => {
+      if (res.defaultModel) setDefaultModel(res.defaultModel);
+    }).catch(() => {});
+  }, []);
+
+  // Ping latencies state map: { modelId: latencyMs }
+  const [pings, setPings] = useState<Record<string, { loading: boolean; ms?: number; error?: string }>>({});
 
   const { data: providers = [] } = useProviders();
   const { data: models = [], isLoading } = useModels(selectedProvider || undefined, search || undefined);
 
-  const filteredModels = models.filter(m => {
+  const filteredModels = models.filter((m: any) => {
+    const isFree = m.isFree ?? isFreeModelId(m.modelId);
+    if (filterFreeOnly && !isFree) return false;
     if (filterToolsOnly && !m.supportsTools) return false;
     return true;
   });
@@ -24,6 +43,17 @@ export const ModelsPage: React.FC = () => {
     try {
       await fetchJson(`/api/models/${modelId}/toggle`, { method: 'PUT' });
       queryClient.invalidateQueries({ queryKey: ['models'] });
+      queryClient.invalidateQueries({ queryKey: ['overview'] });
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleEnableAllFree = async () => {
+    try {
+      await fetchJson('/api/chains/auto-build-free', { method: 'POST' });
+      queryClient.invalidateQueries({ queryKey: ['models'] });
+      queryClient.invalidateQueries({ queryKey: ['chains'] });
       queryClient.invalidateQueries({ queryKey: ['overview'] });
     } catch (err: any) {
       alert(err.message);
@@ -43,6 +73,50 @@ export const ModelsPage: React.FC = () => {
     }
   };
 
+  const handlePingModel = async (modelId: string, providerId: string) => {
+    setPings(prev => ({ ...prev, [modelId]: { loading: true } }));
+    try {
+      const res = await fetchJson<any>('/api/models/ping', {
+        method: 'POST',
+        body: JSON.stringify({ modelId, providerId }),
+      });
+      if (res.success) {
+        setPings(prev => ({ ...prev, [modelId]: { loading: false, ms: res.latencyMs } }));
+      } else {
+        setPings(prev => ({ ...prev, [modelId]: { loading: false, error: res.error } }));
+      }
+    } catch (err: any) {
+      setPings(prev => ({ ...prev, [modelId]: { loading: false, error: err.message } }));
+    }
+  };
+
+  const handleSetDefaultModel = async (modelId: string, providerId?: string) => {
+    try {
+      await fetchJson('/api/models/set-default', {
+        method: 'POST',
+        body: JSON.stringify({ modelId, providerId }),
+      });
+      setDefaultModel(modelId);
+      queryClient.invalidateQueries({ queryKey: ['overview'] });
+      queryClient.invalidateQueries({ queryKey: ['chains'] });
+      alert(`Default model set to "${modelId}". Requests specifying "auto" will prioritize this model.`);
+    } catch (err: any) {
+      alert(`Error setting default model: ${err.message}`);
+    }
+  };
+
+  const handleSyncToOpenCode = async () => {
+    setSyncingOpenCode(true);
+    try {
+      await fetchJson<any>('/api/connect/opencode-sync-all', { method: 'POST' });
+      alert(`Successfully synchronized ${models.length} discovered models to OpenCode (~/.config/opencode/opencode.jsonc)! You can now switch models via /model in OpenCode.`);
+    } catch (err: any) {
+      alert(`OpenCode sync error: ${err.message}`);
+    } finally {
+      setSyncingOpenCode(false);
+    }
+  };
+
   const formatContext = (ctx?: number | null) => {
     if (!ctx) return '-';
     if (ctx >= 1000000) return `${(ctx / 1000000).toFixed(1)}M`;
@@ -50,29 +124,82 @@ export const ModelsPage: React.FC = () => {
     return String(ctx);
   };
 
+  const freeCount = models.filter((m: any) => m.isFree ?? (isFreeModelId(m.modelId) || m.providerProtocol === 'ollama')).length;
+
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary tracking-tight">Discovered Models</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-text-primary tracking-tight">Discovered Models</h1>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-mono bg-bg-surface border border-border-default text-text-secondary">
+              {models.length} total &bull; {freeCount} free
+            </span>
+          </div>
           <p className="text-xs text-text-secondary mt-1">
-            Browse discovered models from connected providers, view enriched metadata, and toggle routing availability.
+            Browse discovered models, benchmark latency, and prioritize free tier endpoints.
           </p>
         </div>
 
-        {providers.length > 0 && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleSyncToOpenCode}
+            disabled={syncingOpenCode}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white hover:bg-accent-hover text-xs font-medium transition-colors shadow-subtle disabled:opacity-50"
+            title="Push all discovered models dynamically into ~/.config/opencode/opencode.jsonc"
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span>{syncingOpenCode ? 'Syncing...' : 'Sync Models to OpenCode'}</span>
+          </button>
+
+          <button
+            onClick={handleEnableAllFree}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-status-healthy text-white hover:opacity-90 text-xs font-medium transition-opacity shadow-subtle"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Auto-Build Free Chain</span>
+          </button>
+
+          {providers.length > 0 && (
             <button
               onClick={() => handleRefreshModels(selectedProvider || providers[0].id)}
               disabled={!!refreshingProvider}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-bg-surface border border-border-default hover:bg-bg-raised text-text-primary text-xs font-medium transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshingProvider ? 'animate-spin' : ''}`} />
-              <span>Refresh Provider Models</span>
+              <span>Refresh Models</span>
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Default Model Setting Banner */}
+      <div className="p-4 rounded-md bg-bg-surface border border-border-default flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-text-primary">Default Coding Model:</span>
+            <span className="font-mono text-xs font-bold text-accent px-2 py-0.5 rounded bg-accent/10 border border-accent/20">
+              {defaultModel || 'auto'}
+            </span>
           </div>
-        )}
+          <p className="text-[11px] text-text-secondary mt-1">
+            Requests specifying model <code className="text-text-primary font-mono">auto</code> or default will route to this target.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => handleSetDefaultModel('auto')}
+            className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors border ${
+              defaultModel === 'auto'
+                ? 'bg-status-healthy text-white border-status-healthy shadow-subtle'
+                : 'bg-bg-base text-text-secondary border-border-subtle hover:text-text-primary'
+            }`}
+          >
+            Auto (Best Free)
+          </button>
+        </div>
       </div>
 
       {/* Filters Bar */}
@@ -83,12 +210,12 @@ export const ModelsPage: React.FC = () => {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by model name or ID (e.g. claude-sonnet, deepseek)..."
+            placeholder="Search by model name, ID, or family (deepseek, claude, gemini, qwen)..."
             className="w-full pl-8 pr-3 py-1.5 text-xs rounded bg-bg-base border border-border-subtle focus:border-accent focus:outline-none text-text-primary"
           />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             value={selectedProvider}
             onChange={e => setSelectedProvider(e.target.value)}
@@ -99,6 +226,20 @@ export const ModelsPage: React.FC = () => {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+
+          {/* Dedicated Free Only Filter Toggle */}
+          <button
+            type="button"
+            onClick={() => setFilterFreeOnly(!filterFreeOnly)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors border ${
+              filterFreeOnly
+                ? 'bg-status-healthy text-white border-status-healthy shadow-subtle'
+                : 'bg-bg-base text-text-secondary border-border-subtle hover:text-text-primary'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Free Tier Only ({freeCount})</span>
+          </button>
 
           <button
             type="button"
@@ -115,7 +256,7 @@ export const ModelsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Models Table / Cards */}
+      {/* Models Table */}
       <div className="rounded-md bg-bg-surface border border-border-default overflow-hidden">
         {filteredModels.length === 0 ? (
           <div className="p-12 text-center text-xs text-text-muted">
@@ -127,79 +268,144 @@ export const ModelsPage: React.FC = () => {
               <thead>
                 <tr className="border-b border-border-subtle bg-bg-raised/50 text-[11px] text-text-muted font-medium">
                   <th className="py-2.5 px-4">Model & Provider</th>
+                  <th className="py-2.5 px-4">Tier</th>
                   <th className="py-2.5 px-4">Context Window</th>
+                  <th className="py-2.5 px-4">Latency</th>
                   <th className="py-2.5 px-4">Capabilities</th>
-                  <th className="py-2.5 px-4">Pricing (1M tokens)</th>
-                  <th className="py-2.5 px-4 text-right">Enabled</th>
+                  <th className="py-2.5 px-4 text-right">Actions / Enabled</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
-                {filteredModels.map((m: any) => (
-                  <tr key={m.id} className="hover:bg-bg-raised/30 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <ProviderLogo providerName={m.providerName || ''} size={22} />
-                        <div>
-                          <div className="font-mono font-medium text-text-primary">{m.modelId}</div>
-                          <div className="text-[11px] text-text-muted">{m.providerName}</div>
+                {filteredModels.map((m: any) => {
+                  const isFree = m.isFree ?? (isFreeModelId(m.modelId) || m.providerProtocol === 'ollama');
+                  const ping = pings[m.modelId];
+
+                  return (
+                    <tr key={m.id} className="hover:bg-bg-raised/30 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <ModelLogo modelId={m.modelId} providerName={m.providerName} size={24} />
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-medium text-text-primary">{m.modelId}</span>
+                            </div>
+                            <div className="text-[11px] text-text-muted">{m.providerName}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="py-3 px-4 font-mono text-text-secondary">
-                      {m.contextWindow ? (
-                        <span className="px-1.5 py-0.5 rounded bg-bg-base border border-border-subtle">
-                          {formatContext(m.contextWindow)} tokens
-                        </span>
-                      ) : (
-                        <span className="text-text-muted">-</span>
-                      )}
-                    </td>
-
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {m.supportsTools && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-bg-base text-text-secondary border border-border-subtle">
-                            <Wrench className="w-2.5 h-2.5 text-accent" />
-                            <span>Tools</span>
+                      {/* Tier Badge */}
+                      <td className="py-3 px-4">
+                        {isFree ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-status-healthy-bg text-status-healthy border border-[rgba(47,158,68,0.3)]">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>FREE</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-[rgba(245,159,0,0.12)] border border-[rgba(245,159,0,0.25)] text-[#f59f00] font-medium">
+                            Paid
                           </span>
                         )}
-                        {m.supportsVision && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-bg-base text-text-secondary border border-border-subtle">
-                            <Eye className="w-2.5 h-2.5 text-[#4DABF7]" />
-                            <span>Vision</span>
+                      </td>
+
+                      <td className="py-3 px-4 font-mono text-text-secondary">
+                        {m.contextWindow ? (
+                          <span className="px-1.5 py-0.5 rounded bg-bg-base border border-border-subtle">
+                            {formatContext(m.contextWindow)} tokens
                           </span>
+                        ) : (
+                          <span className="text-text-muted">-</span>
                         )}
-                        {!m.supportsTools && !m.supportsVision && (
-                          <span className="text-[11px] text-text-muted">Chat only</span>
+                      </td>
+
+                      {/* Latency Ping */}
+                      <td className="py-3 px-4 font-mono text-[11px]">
+                        {ping?.loading ? (
+                          <span className="text-text-muted animate-pulse">Pinging...</span>
+                        ) : ping?.ms ? (
+                          <span className="text-status-healthy font-semibold">{ping.ms}ms</span>
+                        ) : ping?.error ? (
+                          <span className="text-status-error text-[10px]" title={ping.error}>Error</span>
+                        ) : (
+                          <button
+                            onClick={() => handlePingModel(m.modelId, m.providerId)}
+                            className="px-1.5 py-0.5 rounded bg-bg-base hover:bg-bg-raised border border-border-subtle text-text-muted hover:text-text-primary text-[10px]"
+                            title="Test model round-trip latency"
+                          >
+                            Ping
+                          </button>
                         )}
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="py-3 px-4 font-mono text-text-secondary text-[11px]">
-                      {m.pricingInput != null ? (
-                        <span>${m.pricingInput} in / ${m.pricingOutput || m.pricingInput} out</span>
-                      ) : (
-                        <span className="text-text-muted">-</span>
-                      )}
-                    </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {m.supportsTools && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-bg-base text-text-secondary border border-border-subtle">
+                              <Wrench className="w-2.5 h-2.5 text-accent" />
+                              <span>Tools</span>
+                            </span>
+                          )}
+                          {m.supportsVision && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-bg-base text-text-secondary border border-border-subtle">
+                              <Eye className="w-2.5 h-2.5 text-[#4DABF7]" />
+                              <span>Vision</span>
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => handleToggleModel(m.id)}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          m.enabled ? 'bg-accent' : 'bg-bg-raised'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                            m.enabled ? 'translate-x-4' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => handleSetDefaultModel(m.modelId, m.providerId)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors border ${
+                              defaultModel === m.modelId
+                                ? 'bg-status-healthy-bg text-status-healthy border-status-healthy/40 font-semibold'
+                                : 'bg-bg-base hover:bg-bg-raised text-text-muted hover:text-text-primary border-border-subtle'
+                            }`}
+                            title="Set this model as default target for auto"
+                          >
+                            {defaultModel === m.modelId ? '★ Default' : 'Set Default'}
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(`nonstop/${m.modelId}`);
+                              alert(`Copied model slug for OpenCode: nonstop/${m.modelId}`);
+                            }}
+                            className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary transition-colors border border-border-subtle"
+                            title="Copy model slug for OpenCode"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+
+                          {onOpenPlayground && (
+                            <button
+                              onClick={() => onOpenPlayground(m.modelId)}
+                              className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-accent transition-colors"
+                              title="Test prompt in playground"
+                            >
+                              <Play className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => handleToggleModel(m.id)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              m.enabled ? 'bg-accent' : 'bg-bg-raised'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                m.enabled ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

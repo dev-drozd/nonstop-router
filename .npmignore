@@ -1,0 +1,23 @@
+# Source (dist/ is what ships)
+src/
+docs/
+public/assets/og-image.png
+
+# Build & tooling
+tsconfig.json
+tsconfig.server.json
+vite.config.ts
+tailwind.config.js
+postcss.config.js
+index.html
+Dockerfile
+.dockerignore
+
+# Dev / meta
+.github/
+*.log
+.git/
+.gitignore
+.npmignore
+.nonstop/
+*.tsbuildinfo

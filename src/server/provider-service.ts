@@ -5,6 +5,8 @@ import os from 'os';
 import { getDb } from './db.js';
 import { encryptKey, decryptKey, maskKey } from './crypto.js';
 import { lookupModelMetadata } from './models-meta.js';
+import { modelsUrlForBase } from './config.js';
+import { isFreeModelId } from '../shared/types.js';
 import type { Provider, ProviderKey, Model, ProviderProtocol, KeySelectionStrategy } from '../shared/types.js';
 
 export async function testProviderConnection(
@@ -13,7 +15,7 @@ export async function testProviderConnection(
   rawKey?: string
 ): Promise<{ success: boolean; latencyMs: number; error?: string; modelCount?: number }> {
   const start = Date.now();
-  const cleanUrl = baseUrl.replace(/\/+$/, '');
+  const cleanUrl = (baseUrl || '').replace(/\/+$/, '');
 
   try {
     const controller = new AbortController();
@@ -25,19 +27,15 @@ export async function testProviderConnection(
     };
 
     if (protocol === 'openai') {
-      url = cleanUrl.endsWith('/models') ? cleanUrl : `${cleanUrl}/models`;
-      if (rawKey) {
-        headers['Authorization'] = `Bearer ${rawKey.trim()}`;
-      }
+      url = modelsUrlForBase(cleanUrl);
+      if (rawKey) headers['Authorization'] = `Bearer ${rawKey.trim()}`;
     } else if (protocol === 'anthropic') {
-      url = cleanUrl.endsWith('/models') ? cleanUrl : `${cleanUrl}/models`;
+      url = modelsUrlForBase(cleanUrl);
       headers['anthropic-version'] = '2023-06-01';
-      if (rawKey) {
-        headers['x-api-key'] = rawKey.trim();
-      }
+      if (rawKey) headers['x-api-key'] = rawKey.trim();
     } else if (protocol === 'gemini') {
       const keyParam = rawKey ? `?key=${encodeURIComponent(rawKey.trim())}` : '';
-      url = `${cleanUrl}/models${keyParam}`;
+      url = `${modelsUrlForBase(cleanUrl)}${keyParam}`;
     }
 
     const res = await fetch(url, { headers, signal: controller.signal });
@@ -66,11 +64,7 @@ export async function testProviderConnection(
       modelCount = data.length;
     }
 
-    return {
-      success: true,
-      latencyMs,
-      modelCount,
-    };
+    return { success: true, latencyMs, modelCount };
   } catch (err: any) {
     return {
       success: false,
@@ -99,15 +93,15 @@ export async function fetchAndSyncModels(providerId: string): Promise<Model[]> {
   let url = '';
 
   if (provider.protocol === 'openai') {
-    url = cleanUrl.endsWith('/models') ? cleanUrl : `${cleanUrl}/models`;
+    url = modelsUrlForBase(cleanUrl);
     if (rawKey) headers['Authorization'] = `Bearer ${rawKey.trim()}`;
   } else if (provider.protocol === 'anthropic') {
-    url = cleanUrl.endsWith('/models') ? cleanUrl : `${cleanUrl}/models`;
+    url = modelsUrlForBase(cleanUrl);
     headers['anthropic-version'] = '2023-06-01';
     if (rawKey) headers['x-api-key'] = rawKey.trim();
   } else if (provider.protocol === 'gemini') {
     const keyParam = rawKey ? `?key=${encodeURIComponent(rawKey.trim())}` : '';
-    url = `${cleanUrl}/models${keyParam}`;
+    url = `${modelsUrlForBase(cleanUrl)}${keyParam}`;
   }
 
   const res = await fetch(url, { headers });
@@ -135,17 +129,18 @@ export async function fetchAndSyncModels(providerId: string): Promise<Model[]> {
     INSERT INTO models (
       id, provider_id, model_id, name, enabled,
       context_window, max_output, supports_tools, supports_vision, supports_streaming,
-      pricing_input, pricing_output, last_discovered_at
+      is_free, pricing_input, pricing_output, last_discovered_at
     ) VALUES (
       ?, ?, ?, ?, 1,
       ?, ?, ?, ?, 1,
-      ?, ?, ?
+      ?, ?, ?, ?
     ) ON CONFLICT(provider_id, model_id) DO UPDATE SET
       name = excluded.name,
       context_window = COALESCE(excluded.context_window, models.context_window),
       max_output = COALESCE(excluded.max_output, models.max_output),
       supports_tools = excluded.supports_tools,
       supports_vision = excluded.supports_vision,
+      is_free = excluded.is_free,
       pricing_input = COALESCE(excluded.pricing_input, models.pricing_input),
       pricing_output = COALESCE(excluded.pricing_output, models.pricing_output),
       last_discovered_at = excluded.last_discovered_at
@@ -153,7 +148,13 @@ export async function fetchAndSyncModels(providerId: string): Promise<Model[]> {
 
   for (const m of rawModels) {
     if (!m.id) continue;
-    const meta = await lookupModelMetadata(m.id);
+    let meta: Awaited<ReturnType<typeof lookupModelMetadata>> = null;
+    try {
+      meta = await lookupModelMetadata(m.id);
+    } catch (err: any) {
+      // Metadata is optional enrichment; never fail discovery over it.
+      console.warn(`Model metadata lookup failed for ${m.id}:`, err?.message);
+    }
     const modelRecordId = `model_${crypto.randomUUID()}`;
 
     upsertStmt.run(
@@ -165,6 +166,7 @@ export async function fetchAndSyncModels(providerId: string): Promise<Model[]> {
       meta?.output ?? null,
       meta?.tools !== false ? 1 : 0, // default true unless explicitly false in dataset
       meta?.vision === true ? 1 : 0,
+      isFreeModelId(m.id) ? 1 : 0,
       meta?.pricingInput ?? null,
       meta?.pricingOutput ?? null,
       now
@@ -389,19 +391,23 @@ export async function importProviderFromOpenCode(candidateKey: string, customRaw
     const synced = await fetchAndSyncModels(providerId);
     modelsCount = synced.length;
 
-    // Add first 3 models to default 'auto' chain if auto chain has no targets
+    // Add discovered free models to default 'auto' chain if auto chain has no targets
     const autoChain = db.prepare('SELECT id FROM chains WHERE name = ?').get('auto') as any;
     if (autoChain) {
       const existingTargets = db.prepare('SELECT COUNT(*) as count FROM chain_targets WHERE chain_id = ?').get(autoChain.id) as { count: number };
       if (existingTargets.count === 0 && synced.length > 0) {
-        const topModels = synced.slice(0, 3);
-        const insertTarget = db.prepare(`
-          INSERT INTO chain_targets (id, chain_id, provider_id, model_id, order_index, requires_tools, min_context_window)
-          VALUES (?, ?, ?, ?, ?, 0, NULL)
-        `);
-        topModels.forEach((m, idx) => {
-          insertTarget.run(`target_${crypto.randomUUID()}`, autoChain.id, providerId, m.modelId, idx);
-        });
+        // Only automatically populate verified 100% free models (:free)
+        const freeModels = synced.filter(m => isFreeModelId(m.modelId));
+        const topModels = freeModels.slice(0, 5);
+        if (topModels.length > 0) {
+          const insertTarget = db.prepare(`
+            INSERT INTO chain_targets (id, chain_id, provider_id, model_id, order_index, requires_tools, min_context_window)
+            VALUES (?, ?, ?, ?, ?, 0, NULL)
+          `);
+          topModels.forEach((m, idx) => {
+            insertTarget.run(`target_${crypto.randomUUID()}`, autoChain.id, providerId, m.modelId, idx);
+          });
+        }
       }
     }
   } catch (err: any) {
@@ -423,3 +429,164 @@ export async function importProviderFromOpenCode(candidateKey: string, customRaw
     modelsCount,
   };
 }
+
+export interface ProbeResult {
+  success: boolean;
+  statusCode: number;
+  statusLabel: 'ACTIVE' | 'QUOTA_EXHAUSTED' | 'INVALID_KEY' | 'ERROR' | 'OFFLINE';
+  latencyMs: number;
+  testedModel: string | null;
+  quotaDetails: string;
+  workingBaseUrl: string;
+  modelsCount: number;
+  freeModelsCount: number;
+  models: Array<{ id: string; name?: string; isFree: boolean; context?: number }>;
+  modelsError?: string | null;
+}
+
+export async function probeAndInspectProvider(inputBaseUrl: string, rawKey: string): Promise<ProbeResult> {
+  const cleanInput = inputBaseUrl.replace(/\/+$/, '');
+  const urlCandidates = [cleanInput];
+
+  if (cleanInput.includes('://api.')) {
+    urlCandidates.push(cleanInput.replace('://api.', '://'));
+  } else if (!cleanInput.includes('://api.') && cleanInput.includes('://')) {
+    urlCandidates.push(cleanInput.replace('://', '://api.'));
+  }
+
+  let workingBase = cleanInput;
+  let modelsList: Array<{ id: string; name?: string; isFree: boolean; context?: number }> = [];
+  let modelsFetchSuccess = false;
+  let modelsError: string | null = null;
+  let latencyMs = 0;
+
+  for (const candidate of urlCandidates) {
+    const endpointsToTry = [
+      candidate.endsWith('/models') ? candidate : `${candidate}/models`,
+      candidate.endsWith('/v1') ? `${candidate}/models` : `${candidate}/v1/models`,
+    ];
+
+    for (const ep of endpointsToTry) {
+      const startPing = Date.now();
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 9000);
+
+        const res = await fetch(ep, {
+          headers: {
+            'Authorization': `Bearer ${rawKey.trim()}`,
+            'Accept': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        latencyMs = Date.now() - startPing;
+
+        if (res.ok) {
+          const data = await res.json() as any;
+          const rawModels = data.data || data.models || (Array.isArray(data) ? data : []);
+          modelsList = rawModels.map((m: any) => {
+            const mid = m.id || m.name;
+            const isFree = isFreeModelId(mid);
+            return {
+              id: mid,
+              name: m.name || mid,
+              isFree,
+              context: m.context_length || m.limit?.context || 64000,
+            };
+          });
+
+          workingBase = ep.replace(/\/models\/?$/, '');
+          modelsFetchSuccess = true;
+          break;
+        } else {
+          const txt = await res.text().catch(() => '');
+          modelsError = `HTTP ${res.status}: ${txt.slice(0, 150)}`;
+        }
+      } catch (err: any) {
+        modelsError = err.name === 'AbortError' ? 'Timeout (9s)' : err.message;
+      }
+    }
+
+    if (modelsFetchSuccess) break;
+  }
+
+  const freeModels = modelsList.filter(m => m.isFree);
+  const testModel = freeModels.length > 0 ? freeModels[0].id : (modelsList.length > 0 ? modelsList[0].id : 'auto');
+
+  let chatSuccess = false;
+  let chatStatus = 0;
+  let quotaDetails: string | null = null;
+  let chatError: string | null = null;
+
+  let chatUrl = workingBase.replace(/\/+$/, '');
+  chatUrl = chatUrl.replace(/\/chat\/completions\/?$/, '');
+  chatUrl = `${chatUrl}/chat/completions`;
+
+  const probeStart = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+
+    const res = await fetch(chatUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${rawKey.trim()}`,
+      },
+      body: JSON.stringify({
+        model: testModel,
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 1,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    chatStatus = res.status;
+    latencyMs = Date.now() - probeStart;
+
+    const txt = await res.text();
+    let cleanMsg = txt;
+    try {
+      const j = JSON.parse(txt);
+      if (j.error?.message) cleanMsg = j.error.message;
+    } catch {}
+
+    chatError = cleanMsg;
+
+    if (res.ok) {
+      chatSuccess = true;
+      quotaDetails = 'Active quota verified & functioning';
+    } else if (res.status === 429) {
+      quotaDetails = cleanMsg || 'Quota exhausted / Rate limit reached for this period';
+    } else if (res.status === 401 || res.status === 403) {
+      quotaDetails = 'Invalid API key or unauthorized';
+    } else if (res.status === 402) {
+      quotaDetails = 'Account balance is zero / Quota depleted';
+    }
+  } catch (err: any) {
+    chatError = err.name === 'AbortError' ? 'Connection timed out (12s)' : err.message;
+  }
+
+  let statusLabel: 'ACTIVE' | 'QUOTA_EXHAUSTED' | 'INVALID_KEY' | 'ERROR' | 'OFFLINE' = 'ACTIVE';
+  if (chatStatus === 429) statusLabel = 'QUOTA_EXHAUSTED';
+  else if (chatStatus === 402) statusLabel = 'QUOTA_EXHAUSTED';
+  else if (chatStatus === 401 || chatStatus === 403) statusLabel = 'INVALID_KEY';
+  else if (!chatSuccess && chatStatus !== 0) statusLabel = 'ERROR';
+  else if (!chatSuccess) statusLabel = 'OFFLINE';
+
+  return {
+    success: chatSuccess,
+    statusCode: chatStatus,
+    statusLabel,
+    latencyMs,
+    testedModel: testModel,
+    quotaDetails: quotaDetails || chatError || (chatSuccess ? 'Quota active' : 'Unknown status'),
+    workingBaseUrl: workingBase,
+    modelsCount: modelsList.length,
+    freeModelsCount: modelsList.filter(m => m.isFree).length,
+    models: modelsList,
+    modelsError: modelsFetchSuccess ? null : modelsError,
+  };
+}
+

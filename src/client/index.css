@@ -46,11 +46,11 @@ html.light {
   --color-text-secondary: #5C5852;
   --color-text-muted: #8C877D;
   
-  --color-accent: #D9480F;
-  --color-accent-hover: #C23E0A;
-  --color-accent-active: #A93306;
-  --color-accent-subtle: rgba(217, 72, 15, 0.1);
-  --color-accent-border: rgba(217, 72, 15, 0.3);
+  --color-accent: #E8590C;
+  --color-accent-hover: #D9480F;
+  --color-accent-active: #C23E0A;
+  --color-accent-subtle: rgba(232, 89, 12, 0.1);
+  --color-accent-border: rgba(232, 89, 12, 0.3);
 
   --color-healthy: #2B8A3E;
   --color-healthy-bg: rgba(43, 138, 62, 0.1);
@@ -89,6 +89,104 @@ code, pre, .font-mono {
   background: var(--color-border-strong);
 }
 
+/* Modern Professional Form Controls */
+input[type="text"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="email"],
+textarea,
+select {
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  outline: none;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+input[type="text"]:hover,
+input[type="password"]:hover,
+input[type="search"]:hover,
+input[type="number"]:hover,
+input[type="email"]:hover,
+textarea:hover,
+select:hover {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-bg-raised);
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 3px var(--color-accent-subtle) !important;
+  background-color: var(--color-bg-surface) !important;
+  outline: none !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.85;
+}
+
+/* Modal and dialog backdrop animations */
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal {
+  animation: modalEnter 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Landing Page Subtle Effects */
+.landing-grid-bg {
+  background-size: 36px 36px;
+  background-image: 
+    linear-gradient(to right, rgba(232, 89, 12, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(232, 89, 12, 0.04) 1px, transparent 1px);
+}
+
+html.light .landing-grid-bg {
+  background-image: 
+    linear-gradient(to right, rgba(232, 89, 12, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(232, 89, 12, 0.06) 1px, transparent 1px);
+}
+
+.radial-glow {
+  background: radial-gradient(circle at 50% 0%, rgba(232, 89, 12, 0.14) 0%, transparent 65%);
+}
+
+@keyframes signalPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+.animate-signal-pulse {
+  animation: signalPulse 2.8s ease-in-out infinite;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -97,3 +195,4 @@ code, pre, .font-mono {
     transition-duration: 0.01ms !important;
   }
 }
+

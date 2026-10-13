@@ -10,14 +10,31 @@ import { ConnectPage } from './pages/ConnectPage.js';
 import { LogsPage } from './pages/LogsPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { OnboardingWizard } from './components/OnboardingWizard.js';
-import { Menu } from 'lucide-react';
+import { PlaygroundDrawer } from './components/PlaygroundDrawer.js';
+import { Menu, Play } from 'lucide-react';
 
 export const App: React.FC = () => {
   const queryClient = useQueryClient();
   const [activePage, setActivePage] = useState<PageId>('overview');
   const [isDark, setIsDark] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [wizardDismissed, setWizardDismissed] = useState(false);
+  const [wizardDismissed, setWizardDismissed] = useState(() => {
+    return localStorage.getItem('nonstop_wizard_dismissed') === 'true';
+  });
+
+  const [playgroundOpen, setPlaygroundOpen] = useState(false);
+  const [playgroundModel, setPlaygroundModel] = useState('auto');
+
+  const openPlayground = (modelId: string = 'auto') => {
+    setPlaygroundModel(modelId);
+    setPlaygroundOpen(true);
+  };
+
+  const handleDismissWizard = () => {
+    setWizardDismissed(true);
+    localStorage.setItem('nonstop_wizard_dismissed', 'true');
+  };
+
 
   const { data: providers = [], isLoading: loadingProviders } = useProviders();
 
@@ -99,15 +116,17 @@ export const App: React.FC = () => {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="font-semibold text-xs tracking-tight text-text-primary">NonStop Router</div>
+          <div className="flex items-center justify-center">
+            <img src="/assets/icon.svg" alt="NonStop Router" className="w-7 h-7" width={28} height={28} />
+          </div>
           <div className="w-8" />
         </header>
 
         {/* Scrollable Page Body */}
         <main className="flex-1 overflow-y-auto">
-          {activePage === 'overview' && <OverviewPage onNavigate={setActivePage} />}
+          {activePage === 'overview' && <OverviewPage onNavigate={setActivePage} onOpenPlayground={openPlayground} />}
           {activePage === 'providers' && <ProvidersPage />}
-          {activePage === 'models' && <ModelsPage />}
+          {activePage === 'models' && <ModelsPage onOpenPlayground={openPlayground} />}
           {activePage === 'chains' && <ChainsPage />}
           {activePage === 'connect' && <ConnectPage />}
           {activePage === 'logs' && <LogsPage />}
@@ -115,9 +134,19 @@ export const App: React.FC = () => {
         </main>
       </div>
 
+      {/* Interactive Playground Drawer */}
+      <PlaygroundDrawer
+        isOpen={playgroundOpen}
+        onClose={() => setPlaygroundOpen(false)}
+        initialModel={playgroundModel}
+      />
+
       {/* First-Run Onboarding Wizard */}
       {showWizard && (
-        <OnboardingWizard onComplete={() => setWizardDismissed(true)} />
+        <OnboardingWizard
+          onComplete={handleDismissWizard}
+          onClose={handleDismissWizard}
+        />
       )}
     </div>
   );

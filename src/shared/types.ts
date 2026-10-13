@@ -24,6 +24,7 @@ export interface ProviderKey {
   lastError: string | null;
   lastErrorAt: number | null;
   usageCount: number;
+  tokensUsed?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -42,7 +43,10 @@ export interface Model {
   pricingInput: number | null;
   pricingOutput: number | null;
   lastDiscoveredAt: number;
+  isFree?: boolean;
 }
+
+export type ChainAutoPolicy = 'free_only' | 'free_first' | 'all';
 
 export interface ChainTarget {
   id: string;
@@ -57,6 +61,7 @@ export interface ChainTarget {
   providerProtocol?: ProviderProtocol;
   modelName?: string;
   status?: HealthStatus;
+  isFree?: boolean;
 }
 
 export interface Chain {
@@ -111,6 +116,8 @@ export interface RequestLog {
   errorMessage: string | null;
   requestBody?: string | null;
   responseBody?: string | null;
+  moneySavedUsd?: number;
+  cached?: boolean;
 }
 
 export interface Settings {
@@ -123,6 +130,33 @@ export interface Settings {
   storePayloads: boolean;
   allowLan: boolean;
   theme: 'dark' | 'light';
+  enableCache?: boolean;
+  cacheTtlMs?: number;
+  cacheMaxEntries?: number;
+  enablePromptOptimizer?: boolean;
+  enableRateGovernor?: boolean;
+  rateGovernorRpm?: number;
+  autoDetectLocal?: boolean;
+  chainAutoPolicy?: ChainAutoPolicy;
+  /** The chain used when a client requests model "auto". */
+  defaultModel?: string;
+}
+
+export interface LocalDetectedService {
+  type: 'ollama' | 'lmstudio';
+  name: string;
+  baseUrl: string;
+  models: string[];
+  running: boolean;
+}
+
+/**
+ * Single source of truth for detecting zero-cost models from an id suffix convention.
+ * Matches `:free` and `-free` only, never arbitrary substrings such as "freeform".
+ */
+export function isFreeModelId(modelId: string): boolean {
+  const id = (modelId || '').toLowerCase().trim();
+  return id.endsWith(':free') || id.endsWith('-free') || id.endsWith('/free');
 }
 
 export interface SystemHealthOverview {
@@ -134,6 +168,9 @@ export interface SystemHealthOverview {
   enabledModels: number;
   requestsPerMinute: number;
   totalFailovers: number;
+  totalMoneySavedUsd: number;
+  totalTokensSaved: number;
+  cacheHitCount: number;
   activeChains: Array<{
     chainId: string;
     chainName: string;
@@ -150,4 +187,13 @@ export interface SystemHealthOverview {
     modelId: string;
     error: string;
   }>;
+  runtime?: {
+    port: number;
+    host: string;
+    baseUrl: string;
+    allowLan: boolean;
+    startedAt: number;
+    version: string;
+  };
 }
+

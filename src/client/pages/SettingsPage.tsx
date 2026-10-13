@@ -15,11 +15,19 @@ export const SettingsPage: React.FC = () => {
   const [probeInterval, setProbeInterval] = useState(settings?.healthProbeIntervalMs || 30000);
   const [restartMidstream, setRestartMidstream] = useState(settings?.restartOnMidstreamFailure || false);
   const [logRetention, setLogRetention] = useState(settings?.logRetentionDays || 7);
-  const [storePayloads, setStorePayloads] = useState(settings?.storePayloads || false);
+  const [storePayloads, setStorePayloads] = useState<boolean>(settings?.storePayloads ?? false);
   const [allowLan, setAllowLan] = useState(settings?.allowLan || false);
+  const [enableCache, setEnableCache] = useState(settings?.enableCache ?? true);
+  const [cacheTtlMs, setCacheTtlMs] = useState(settings?.cacheTtlMs ?? 86400000);
+  const [cacheMaxEntries, setCacheMaxEntries] = useState(settings?.cacheMaxEntries ?? 2000);
+  const [enablePromptOptimizer, setEnablePromptOptimizer] = useState(settings?.enablePromptOptimizer ?? false);
+  const [enableRateGovernor, setEnableRateGovernor] = useState(settings?.enableRateGovernor ?? true);
+  const [rateGovernorRpm, setRateGovernorRpm] = useState(settings?.rateGovernorRpm ?? 25);
+  const [chainAutoPolicy, setChainAutoPolicy] = useState<'free_only' | 'free_first' | 'all'>(settings?.chainAutoPolicy || 'free_only');
 
   const [savingSettings, setSavingSettings] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [clearingCache, setClearingCache] = useState(false);
 
   // New gateway key modal
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -37,8 +45,28 @@ export const SettingsPage: React.FC = () => {
       setLogRetention(settings.logRetentionDays);
       setStorePayloads(settings.storePayloads);
       setAllowLan(settings.allowLan);
+      setEnableCache(settings.enableCache ?? true);
+      setCacheTtlMs(settings.cacheTtlMs ?? 86400000);
+      setCacheMaxEntries(settings.cacheMaxEntries ?? 2000);
+      setEnablePromptOptimizer(settings.enablePromptOptimizer ?? false);
+      setEnableRateGovernor(settings.enableRateGovernor ?? true);
+      setRateGovernorRpm(settings.rateGovernorRpm ?? 25);
+      setChainAutoPolicy(settings.chainAutoPolicy || 'free_only');
     }
   }, [settings]);
+
+  const handleClearCache = async () => {
+    setClearingCache(true);
+    try {
+      await fetchJson('/api/cache', { method: 'DELETE' });
+      alert('Local response cache cleared successfully.');
+      queryClient.invalidateQueries({ queryKey: ['overview'] });
+    } catch (err: any) {
+      alert(`Error clearing cache: ${err.message}`);
+    } finally {
+      setClearingCache(false);
+    }
+  };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,9 +84,17 @@ export const SettingsPage: React.FC = () => {
           logRetentionDays: Number(logRetention),
           storePayloads: Boolean(storePayloads),
           allowLan: Boolean(allowLan),
+          enableCache: Boolean(enableCache),
+          cacheTtlMs: Number(cacheTtlMs),
+          cacheMaxEntries: Number(cacheMaxEntries),
+          enablePromptOptimizer: Boolean(enablePromptOptimizer),
+          enableRateGovernor: Boolean(enableRateGovernor),
+          rateGovernorRpm: Number(rateGovernorRpm),
+          chainAutoPolicy,
         }),
       });
       queryClient.invalidateQueries({ queryKey: ['settings'] });
+
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
@@ -211,10 +247,110 @@ export const SettingsPage: React.FC = () => {
             />
             <span className="text-[11px] text-text-muted">Maximum exponential backoff limit.</span>
           </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">
+              Auto-Chain Model Policy (Default Failover Behavior)
+            </label>
+            <select
+              value={chainAutoPolicy}
+              onChange={e => setChainAutoPolicy(e.target.value as any)}
+              className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary cursor-pointer"
+            >
+              <option value="free_only">100% Free Tier Only (Guaranteed $0 - Default)</option>
+              <option value="free_first">Free First + Paid Fallback (Emergency Safety Net)</option>
+              <option value="all">All Models (Include Paid)</option>
+            </select>
+            <span className="text-[11px] text-text-muted">
+              Guarantees failover chains prioritize free endpoints, preventing unexpected credit consumption and 402 errors.
+            </span>
+          </div>
         </div>
 
         {/* Checkbox Toggles */}
-        <div className="space-y-3 pt-2 border-t border-border-subtle">
+        <div className="space-y-4 pt-2 border-t border-border-subtle">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableCache}
+              onChange={e => setEnableCache(e.target.checked)}
+              className="mt-0.5 rounded border-border-default text-accent focus:ring-accent"
+            />
+            <div>
+              <div className="text-xs font-medium text-text-primary">Enable Local Response Cache (identical prompts only)</div>
+              <div className="text-[11px] text-text-muted">
+                Exact-match cache keyed on messages, model, and all sampling parameters (temperature, top_p, max_tokens, seed, tools).
+                Repeat requests return in &lt;5ms at $0 cost with no upstream rate-limit usage.
+              </div>
+            </div>
+          </label>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-7">
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Cache TTL (ms)</label>
+              <input
+                type="number"
+                value={cacheTtlMs}
+                onChange={e => setCacheTtlMs(Number(e.target.value))}
+                className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
+              />
+              <span className="text-[11px] text-text-muted">Entries older than this are evicted.</span>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Max Cache Entries</label>
+              <input
+                type="number"
+                value={cacheMaxEntries}
+                onChange={e => setCacheMaxEntries(Number(e.target.value))}
+                className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
+              />
+              <span className="text-[11px] text-text-muted">Least-recently-used entries are evicted first.</span>
+            </div>
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enablePromptOptimizer}
+              onChange={e => setEnablePromptOptimizer(e.target.checked)}
+              className="mt-0.5 rounded border-border-default text-accent focus:ring-accent"
+            />
+            <div>
+              <div className="text-xs font-medium text-text-primary">Enable Prompt Token Optimizer (lossy)</div>
+              <div className="text-[11px] text-text-muted">
+                Off by default. Collapses redundant whitespace and build logs and de-duplicates large code blocks repeated
+                across older turns. Never modifies the two most recent turns or system prompts.
+              </div>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableRateGovernor}
+              onChange={e => setEnableRateGovernor(e.target.checked)}
+              className="mt-0.5 rounded border-border-default text-accent focus:ring-accent"
+            />
+            <div>
+              <div className="text-xs font-medium text-text-primary">Enable Smart Rate-Limit Governor</div>
+              <div className="text-[11px] text-text-muted">
+                Tracks a rolling requests-per-minute window per key and rotates to a sibling key before the upstream
+                provider returns HTTP 429.
+              </div>
+            </div>
+          </label>
+
+          <div className="pl-7">
+            <label className="block text-xs font-medium text-text-secondary mb-1">Rate Governor Ceiling (requests / minute / key)</label>
+            <input
+              type="number"
+              value={rateGovernorRpm}
+              onChange={e => setRateGovernorRpm(Number(e.target.value))}
+              className="w-full md:w-64 px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
+            />
+            <span className="text-[11px] text-text-muted">Conservative default of 25 RPM suits most free tiers.</span>
+          </div>
+
           <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -264,6 +400,22 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
           </label>
+        </div>
+
+        {/* Cache Maintenance Box */}
+        <div className="pt-4 border-t border-border-subtle flex items-center justify-between">
+          <div>
+            <div className="text-xs font-medium text-text-primary">Response Cache Maintenance</div>
+            <div className="text-[11px] text-text-muted">Flush all cached completions if upstream model behavior changed.</div>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearCache}
+            disabled={clearingCache}
+            className="px-3 py-1.5 text-xs font-medium rounded bg-bg-base hover:bg-bg-raised border border-border-default text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
+          >
+            {clearingCache ? 'Clearing...' : 'Clear Cache'}
+          </button>
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t border-border-subtle">

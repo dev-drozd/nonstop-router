@@ -3,11 +3,34 @@ import type { Provider, Model, Chain, GatewayKey, RequestLog, Settings, SystemHe
 
 const API_BASE = '';
 
+declare global {
+  interface Window {
+    __NONSTOP__?: { adminToken?: string };
+  }
+}
+
+/**
+ * The admin token is injected into the served dashboard HTML. It gates the local
+ * /api surface against cross-site requests from other pages on the machine.
+ */
+export function getAdminToken(): string {
+  return window.__NONSTOP__?.adminToken || '';
+}
+
+export function withAdminToken(url: string): string {
+  const token = getAdminToken();
+  if (!token) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}admin_token=${encodeURIComponent(token)}`;
+}
+
 export async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = getAdminToken();
   const res = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { 'x-nonstop-admin': token } : {}),
       ...options?.headers,
     },
   });

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useChains, useModels, fetchJson } from '../api.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { ProviderLogo } from '../components/ProviderLogo.js';
+import { ModelLogo } from '../components/ModelLogo.js';
 import { StatusBadge } from '../components/StatusBadge.js';
-import { GitFork, Plus, Trash2, ArrowUp, ArrowDown, GripVertical, Check, Wrench, Shield } from 'lucide-react';
+import { GitFork, Plus, Trash2, ArrowUp, ArrowDown, Sparkles, Shield, Wrench } from 'lucide-react';
 import type { Chain, ChainMode } from '../../shared/types.js';
+import { isFreeModelId } from '../../shared/types.js';
 
 export const ChainsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -14,6 +15,8 @@ export const ChainsPage: React.FC = () => {
   const [selectedChainId, setSelectedChainId] = useState<string>('');
   const [showAddChainModal, setShowAddChainModal] = useState(false);
   const [showAddTargetModal, setShowAddTargetModal] = useState(false);
+  const [buildingFreeChain, setBuildingFreeChain] = useState(false);
+  const [autoPolicy, setAutoPolicy] = useState<'free_only' | 'free_first' | 'all'>('free_only');
 
   // New chain form
   const [newChainName, setNewChainName] = useState('');
@@ -43,6 +46,23 @@ export const ChainsPage: React.FC = () => {
       setNewChainDesc('');
     } catch (err: any) {
       alert(err.message);
+    }
+  };
+
+  const handleAutoBuildChain = async (policy: 'free_only' | 'free_first' | 'all' = autoPolicy) => {
+    setBuildingFreeChain(true);
+    try {
+      await fetchJson('/api/chains/auto-build', {
+        method: 'POST',
+        body: JSON.stringify({ policy, chainId: activeChain?.id || 'chain_auto' }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['chains'] });
+      queryClient.invalidateQueries({ queryKey: ['overview'] });
+      queryClient.invalidateQueries({ queryKey: ['models'] });
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setBuildingFreeChain(false);
     }
   };
 
@@ -153,13 +173,38 @@ export const ChainsPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddChainModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white hover:bg-accent-hover text-xs font-medium transition-colors shadow-subtle self-start sm:self-auto"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New Chain</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 bg-bg-surface p-1 rounded-md border border-border-default shadow-subtle">
+            <span className="text-[11px] text-text-muted pl-1.5 font-medium">Policy:</span>
+            <select
+              value={autoPolicy}
+              onChange={(e) => setAutoPolicy(e.target.value as any)}
+              className="bg-bg-raised border border-border-subtle rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent font-medium cursor-pointer"
+              title="Choose failover chain generation policy"
+            >
+              <option value="free_only">100% Free Tier ($0 - Default)</option>
+              <option value="free_first">Free First + Paid Fallback</option>
+              <option value="all">All Models (Include Paid)</option>
+            </select>
+
+            <button
+              onClick={() => handleAutoBuildChain(autoPolicy)}
+              disabled={buildingFreeChain}
+              className="flex items-center gap-1.5 px-3 py-1 rounded bg-status-healthy text-white hover:opacity-90 text-xs font-medium transition-opacity shadow-subtle disabled:opacity-50"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{buildingFreeChain ? 'Building...' : 'Auto-Build Chain'}</span>
+            </button>
+          </div>
+
+          <button
+            onClick={() => setShowAddChainModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white hover:bg-accent-hover text-xs font-medium transition-colors shadow-subtle"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Chain</span>
+          </button>
+        </div>
       </div>
 
       {/* Chain Selector Tabs */}
@@ -182,14 +227,29 @@ export const ChainsPage: React.FC = () => {
         })}
       </div>
 
-      {activeChain && (
+      {activeChain && (() => {
+        const freeCount = activeChain.targets?.filter(t => t.isFree ?? isFreeModelId(t.modelId)).length || 0;
+        const totalCount = activeChain.targets?.length || 0;
+        const paidCount = totalCount - freeCount;
+
+        return (
         <div className="space-y-6">
           {/* Chain Settings Header Card */}
           <div className="p-4 rounded-md bg-bg-surface border border-border-default flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-base font-semibold text-text-primary">{activeChain.name}</span>
-                <span className="text-xs text-text-muted">({activeChain.targets?.length || 0} targets)</span>
+                <span className="text-xs text-text-muted">({totalCount} targets)</span>
+                {totalCount > 0 && paidCount === 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-status-healthy-bg text-status-healthy border border-[rgba(47,158,68,0.3)]">
+                    100% Free Tier ($0 Guaranteed)
+                  </span>
+                )}
+                {totalCount > 0 && paidCount > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-[rgba(245,159,0,0.15)] text-[#f59f00] border border-[rgba(245,159,0,0.3)]">
+                    {freeCount} Free + {paidCount} Paid Fallbacks
+                  </span>
+                )}
               </div>
               <p className="text-xs text-text-secondary mt-1">
                 {activeChain.description || `Incoming requests with model '${activeChain.name}' will route through these targets in order.`}
@@ -238,67 +298,81 @@ export const ChainsPage: React.FC = () => {
 
             {!activeChain.targets || activeChain.targets.length === 0 ? (
               <div className="p-8 text-center rounded-md bg-bg-surface border border-border-default text-xs text-text-muted space-y-2">
-                <GitFork className="w-8 h-8 mx-auto opacity-50" />
-                <div>No targets in this chain. Add at least one target model.</div>
+                <img src="/assets/icon.svg" alt="NonStop Router" className="w-8 h-8 mx-auto opacity-50" width={32} height={32} />
+                <div>No targets in this chain. Select a policy above and click "Auto-Build Chain".</div>
               </div>
             ) : (
               <div className="space-y-2">
-                {activeChain.targets.map((t, idx) => (
-                  <div
-                    key={t.id}
-                    className="p-3.5 rounded-md bg-bg-surface border border-border-default flex items-center justify-between gap-3 hover:border-border-strong transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded bg-bg-raised border border-border-subtle flex items-center justify-center font-mono text-[11px] font-semibold text-text-muted">
-                        {idx + 1}
+                {activeChain.targets.map((t, idx) => {
+                  const isFree = t.isFree ?? isFreeModelId(t.modelId);
+
+                  return (
+                    <div
+                      key={t.id}
+                      className="p-3.5 rounded-md bg-bg-surface border border-border-default flex items-center justify-between gap-3 hover:border-border-strong transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded bg-bg-raised border border-border-subtle flex items-center justify-center font-mono text-[11px] font-semibold text-text-muted">
+                          {idx + 1}
+                        </div>
+
+                        <ModelLogo modelId={t.modelId} providerName={t.providerName} size={26} />
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-semibold text-text-primary">{t.modelId}</span>
+                            {isFree ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-status-healthy-bg text-status-healthy border border-[rgba(47,158,68,0.3)]">
+                                FREE
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-[rgba(245,159,0,0.15)] text-[#f59f00] border border-[rgba(245,159,0,0.3)]">
+                                PAID
+                              </span>
+                            )}
+                            <span className="text-[11px] text-text-muted">({t.providerName})</span>
+                            <StatusBadge status={t.status || 'healthy'} />
+                          </div>
+                          <div className="text-[10px] text-text-muted mt-0.5">
+                            {idx === 0 ? 'Primary Active Route' : `Fallback #${idx}`}
+                          </div>
+                        </div>
                       </div>
 
-                      <ProviderLogo providerName={t.providerName || ''} size={24} />
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-semibold text-text-primary">{t.modelId}</span>
-                          <span className="text-[11px] text-text-muted">({t.providerName})</span>
-                          <StatusBadge status={t.status || 'healthy'} />
-                        </div>
-                        <div className="text-[10px] text-text-muted mt-0.5">
-                          {idx === 0 ? 'Primary Target' : `Fallback #${idx}`}
-                        </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleMoveTarget(idx, 'up')}
+                          disabled={idx === 0}
+                          className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
+                          title="Move Up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveTarget(idx, 'down')}
+                          disabled={idx === activeChain.targets!.length - 1}
+                          className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
+                          title="Move Down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleRemoveTarget(idx)}
+                          className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-status-error transition-colors ml-2"
+                          title="Remove Target"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleMoveTarget(idx, 'up')}
-                        disabled={idx === 0}
-                        className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
-                        title="Move Up"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleMoveTarget(idx, 'down')}
-                        disabled={idx === activeChain.targets!.length - 1}
-                        className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
-                        title="Move Down"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleRemoveTarget(idx)}
-                        className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-status-error transition-colors ml-2"
-                        title="Remove Target"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Add Target Modal */}
       {showAddTargetModal && (
@@ -307,26 +381,36 @@ export const ChainsPage: React.FC = () => {
           <div className="relative z-10 w-full max-w-lg rounded-md bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
             <h2 className="text-base font-semibold text-text-primary">Add Target to Chain</h2>
             <div className="max-h-80 overflow-y-auto space-y-2">
-              {models.filter(m => m.enabled).map((m: any) => (
-                <div
-                  key={m.id}
-                  className="p-2.5 rounded bg-bg-raised border border-border-subtle flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <ProviderLogo providerName={m.providerName} size={20} />
-                    <div>
-                      <div className="font-mono text-xs font-medium text-text-primary">{m.modelId}</div>
-                      <div className="text-[10px] text-text-muted">{m.providerName}</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleAddTarget(m.providerId, m.modelId)}
-                    className="px-2.5 py-1 rounded bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors"
+              {models.filter(m => m.enabled).map((m: any) => {
+                const isFree = isFreeModelId(m.modelId);
+                return (
+                  <div
+                    key={m.id}
+                    className="p-2.5 rounded bg-bg-raised border border-border-subtle flex items-center justify-between gap-3"
                   >
-                    Select
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2.5">
+                      <ModelLogo modelId={m.modelId} providerName={m.providerName} size={22} />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-medium text-text-primary">{m.modelId}</span>
+                          {isFree && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-status-healthy-bg text-status-healthy">
+                              FREE
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-text-muted">{m.providerName}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleAddTarget(m.providerId, m.modelId)}
+                      className="px-2.5 py-1 rounded bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors"
+                    >
+                      Select
+                    </button>
+                  </div>
+                );
+              })}
             </div>
             <div className="flex justify-end pt-2 border-t border-border-subtle">
               <button
@@ -354,7 +438,7 @@ export const ChainsPage: React.FC = () => {
                   required
                   value={newChainName}
                   onChange={e => setNewChainName(e.target.value)}
-                  placeholder="e.g. nonstop-coding, fast, reasoning"
+                  placeholder="e.g. nonstop-free, coding, fast"
                   className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
@@ -366,7 +450,7 @@ export const ChainsPage: React.FC = () => {
                   onChange={e => setNewChainMode(e.target.value as any)}
                   className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 >
-                  <option value="priority">Priority Mode (Return to #1 upon recovery)</option>
+                  <option value="priority">Priority Mode (Always return to Target #1)</option>
                   <option value="sticky">Sticky Mode (Stay on working target)</option>
                 </select>
               </div>
@@ -377,7 +461,7 @@ export const ChainsPage: React.FC = () => {
                   type="text"
                   value={newChainDesc}
                   onChange={e => setNewChainDesc(e.target.value)}
-                  placeholder="e.g. Primary coding chain with automatic fallbacks"
+                  placeholder="e.g. Auto free routing chain"
                   className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>

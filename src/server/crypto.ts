@@ -2,10 +2,10 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execFileSync } from 'child_process';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV recommended for GCM
-const TAG_LENGTH = 16; // 128-bit authentication tag
 
 export function getAppDataDir(): string {
   const dir = path.join(os.homedir(), '.nonstop');
@@ -15,27 +15,53 @@ export function getAppDataDir(): string {
   return dir;
 }
 
+let cachedMasterKey: Buffer | null = null;
+
 function getOrCreateMasterKey(): Buffer {
+  if (cachedMasterKey) return cachedMasterKey;
+
   const keyPath = path.join(getAppDataDir(), 'master.key');
   if (fs.existsSync(keyPath)) {
     const raw = fs.readFileSync(keyPath);
     if (raw.length === 32) {
+      cachedMasterKey = raw;
       return raw;
     }
+    throw new Error(
+      `Refusing to start: existing master key at ${keyPath} is ${raw.length} bytes, expected 32. ` +
+      `Restore the original key or remove it to re-create (this deletes the ability to decrypt stored API keys).`
+    );
   }
 
   // Generate new 256-bit cryptographic key
   const newKey = crypto.randomBytes(32);
   try {
     fs.writeFileSync(keyPath, newKey, { mode: 0o600 });
-  } catch (err) {
-    // Fallback if filesystem permissions fail on Windows
+  } catch {
+    // Fallback if filesystem permissions fail (e.g. some Windows setups)
     fs.writeFileSync(keyPath, newKey);
+    try {
+      fs.chmodSync(keyPath, 0o600);
+    } catch {}
   }
+
+  // Best-effort restrictive permissions on Windows as well.
+  if (process.platform === 'win32') {
+    try {
+      const user = process.env.USERNAME || '';
+      if (user) {
+        execFileSync('icacls', [keyPath, '/inheritance:r', '/grant:r', `${user}:F`], { stdio: 'ignore' });
+      }
+    } catch {}
+  }
+
+  cachedMasterKey = newKey;
   return newKey;
 }
 
-const masterKey = getOrCreateMasterKey();
+function getMasterKey(): Buffer {
+  return getOrCreateMasterKey();
+}
 
 /**
  * Encrypt a plaintext string using AES-256-GCM.
@@ -43,11 +69,11 @@ const masterKey = getOrCreateMasterKey();
  */
 export function encryptKey(plainText: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, masterKey, iv);
-  
+  const cipher = crypto.createCipheriv(ALGORITHM, getMasterKey(), iv);
+
   let ciphertext = cipher.update(plainText, 'utf8', 'hex');
   ciphertext += cipher.final('hex');
-  
+
   const tag = cipher.getAuthTag();
   return `${iv.toString('hex')}:${tag.toString('hex')}:${ciphertext}`;
 }
@@ -65,7 +91,7 @@ export function decryptKey(encryptedPayload: string): string {
   const iv = Buffer.from(ivHex, 'hex');
   const tag = Buffer.from(tagHex, 'hex');
 
-  const decipher = crypto.createDecipheriv(ALGORITHM, masterKey, iv);
+  const decipher = crypto.createDecipheriv(ALGORITHM, getMasterKey(), iv);
   decipher.setAuthTag(tag);
 
   let decrypted = decipher.update(ciphertextHex, 'hex', 'utf8');
@@ -75,14 +101,19 @@ export function decryptKey(encryptedPayload: string): string {
 
 /**
  * Mask an API key so it is safe to display in logs and UI.
- * e.g., "th-abcde1234567890xyz" -> "th-...0xyz"
+ * e.g., "sk-proj-abcde1234567890xyz" -> "sk-proj-...0xyz"
  */
 export function maskKey(key: string): string {
   if (!key || key.length <= 8) {
     return '****';
   }
-  const prefixMatch = key.match(/^([a-zA-Z0-9_\-]+?[-_])/);
-  const prefix = prefixMatch ? prefixMatch[1] : key.slice(0, 3);
+  const firstSep = key.search(/[-_]/);
+  let prefix: string;
+  if (firstSep >= 0 && firstSep <= 12) {
+    prefix = key.slice(0, firstSep + 1);
+  } else {
+    prefix = key.slice(0, 4);
+  }
   const suffix = key.slice(-4);
   return `${prefix}...${suffix}`;
 }
@@ -101,7 +132,19 @@ export function generateGatewayKey(): { rawKey: string; keyHash: string; keyMask
 
 /**
  * Hash gateway API key with SHA-256 for secure verification.
+ * Keys are 192-bit random tokens, so a fast hash is sufficient (no PBKDF needed).
  */
 export function hashGatewayKey(rawKey: string): string {
   return crypto.createHash('sha256').update(rawKey.trim()).digest('hex');
+}
+
+/**
+ * Constant-time comparison of two token strings. Falls back to a length check
+ * (which leaks only length, never content) before delegating to timingSafeEqual.
+ */
+export function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a || '', 'utf8');
+  const bb = Buffer.from(b || '', 'utf8');
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
 }

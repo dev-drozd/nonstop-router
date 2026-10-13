@@ -1,235 +1,347 @@
-# NonStop Router
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/assets/logo-stacked.svg">
+    <source media="(prefers-color-scheme: light)" srcset="public/assets/logo-stacked-on-light.svg">
+    <img alt="NonStop Router" src="public/assets/logo-stacked.svg" width="360">
+  </picture>
+</p>
 
-NonStop Router is a production-quality, local-first LLM gateway that runs on your local machine. It sits between AI coding tools (OpenCode, Claude Code, Codex CLI, Cline, Roo Code, Continue, Aider, Zed) and multiple LLM providers, automatically executing transparent failover across model targets and API key pools so your workflow never halts.
+<h1 align="center">NonStop Router</h1>
 
----
+<p align="center">
+  <strong>A local-first LLM gateway that keeps your AI coding tools running when a provider rate-limits, breaks, or goes dark.</strong>
+</p>
 
-## Key Capabilities
+<p align="center">
+  <a href="https://www.npmjs.com/package/nonstop-router"><img alt="npm version" src="https://img.shields.io/npm/v/nonstop-router?color=E8590C&label=npm"></a>
+  <a href="https://www.npmjs.com/package/nonstop-router"><img alt="npm downloads" src="https://img.shields.io/npm/dm/nonstop-router?color=E8590C"></a>
+  <a href="https://github.com/skr-electronics-lab/nonstop-router/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/skr-electronics-lab/nonstop-router/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
+  <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D20-brightgreen">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey">
+</p>
 
-- **Transparent Failover**: Instantly switches to the next healthy key or fallback model upon encountering HTTP 429 rate limits, 5xx outages, 401/403 authorization failures, network timeouts, or stream interruptions before token delivery.
-- **Unified Multi-Protocol Gateway**:
-  - OpenAI Chat Completions: `/v1/chat/completions` (streaming SSE and non-streaming)
-  - Anthropic Messages API: `/v1/messages` (with bidirectional translation for Claude Code)
-  - OpenAI Responses API: `/v1/responses` (for Codex CLI)
-  - Dynamic Models Catalog: `/v1/models`
-- **Key Pooling & Selection Strategies**: Pool multiple keys per provider with configurable selection strategies: Round Robin, Fill-First, or Least-Used.
-- **Failover Chain Modes**:
-  - **Priority Mode**: Automatically returns to the highest-priority target as soon as it recovers from cooldown.
-  - **Sticky Mode**: Latches onto the current functioning target until a failure occurs, maintaining session continuity.
-- **Automatic Model Discovery**: Discovers all models returned by provider endpoints (`GET /v1/models`) and enriches entries with context window limits, tool capabilities, vision support, and pricing metadata.
-- **Zero-Friction Tool Integration**: Pre-generated configurations for OpenCode, Claude Code, Codex CLI, Cline, Roo Code, Continue, Aider, and Zed. Includes a one-click OpenCode configuration writer with automated backup and diff preview.
-- **Local-First Security**: Upstream provider API keys are encrypted at rest using AES-256-GCM. The gateway binds to localhost (`127.0.0.1`) by default.
-
----
-
-## Screenshots
-
-### System Overview
-![System Overview](docs/screenshots/overview.png)
-
-### Providers & Encrypted Key Pools
-![Providers & Key Pools](docs/screenshots/providers.png)
-
-### Discovered Models Catalog
-![Models Catalog](docs/screenshots/models.png)
-
-### Failover Chains Configuration
-![Chains Configuration](docs/screenshots/chains.png)
-
-### Tool Connection & One-Click OpenCode Integration
-![Connect Tools](docs/screenshots/connect.png)
-
-### Request Audit Trail
-![Request Logs](docs/screenshots/logs.png)
-
-### Settings & Gateway Keys
-![Settings](docs/screenshots/settings.png)
-
-### Dark and Light Themes
-![Dark Theme](docs/screenshots/dark-theme.png)
-![Light Theme](docs/screenshots/light-theme.png)
+<p align="center">
+  <a href="#-quickstart">Quickstart</a> &bull;
+  <a href="#-how-it-works">How It Works</a> &bull;
+  <a href="#-supported-tools">Supported Tools</a> &bull;
+  <a href="#-features">Features</a> &bull;
+  <a href="#-api-reference">API Reference</a> &bull;
+  <a href="#-security">Security</a> &bull;
+  <a href="#-faq">FAQ</a>
+</p>
 
 ---
 
-## Quickstart
+## What is NonStop Router?
+
+NonStop Router is a **local proxy** that sits between your AI coding agents (OpenCode, Claude Code, Codex CLI, Cline, Aider, Continue, Zed, …) and the model providers you use. You point every tool at one local URL, and the router handles:
+
+- **Failover** — if a key hits `429`, `5xx`, `401/403`, or times out, the request is retried on the next key or the next model automatically.
+- **Key pooling** — pool multiple API keys per provider and spread load across them.
+- **One endpoint, many providers** — OpenAI, Anthropic, Google Gemini, and any OpenAI-compatible API behind a single `http://127.0.0.1:4000/v1` URL.
+- **Local dashboard** — inspect providers, models, chains, live request logs, and usage.
+
+It runs entirely on your machine, stores everything in a local SQLite database, encrypts your provider keys at rest, and **never sends telemetry anywhere**.
+
+> **Why?** Free tiers and shared keys run out of quota constantly. NonStop Router turns "rate limited, try again later" into "silently switched to a healthy model mid-session."
+
+---
+
+## ✨ Features
+
+| | |
+|---|---|
+| 🔁 **Transparent failover** | Retries across keys and models on `429`, `5xx`, `401/403`, timeouts, and pre-token stream drops. |
+| 🗝️ **Key pools** | Multiple keys per provider with `round-robin`, `fill-first`, and `least-used` strategies. |
+| 🧩 **Multi-protocol** | OpenAI Chat Completions, Anthropic Messages, and OpenAI Responses APIs — with bidirectional translation. |
+| 🎯 **Failover chains** | Ordered model chains in **Priority** mode (return to #1 on recovery) or **Sticky** mode (latch onto the working target). |
+| 🧠 **Auto model discovery** | Pulls `/v1/models` from each provider and enriches entries with context window, tool, vision, and pricing metadata from [models.dev](https://models.dev). |
+| 💸 **Free-tier chains** | One-click auto-build of a chain that prefers `:free` and local models; optional paid fallback with a hard cap. |
+| 🚦 **Rate governor** | Rolling per-key RPM tracking that rotates keys *before* the upstream returns `429`. |
+| ⚡ **Response cache** | Exact-match cache on SQLite (keyed by messages, model, and all sampling params). Repeat prompts return in milliseconds at zero cost. |
+| 🩺 **Health prober** | Background probing recovers cooling/down keys automatically. |
+| 🔌 **MCP server** | Expose gateway status and model lists to MCP-capable agents at `/mcp`. |
+| 🔐 **Encrypted keys** | Upstream keys encrypted at rest with AES-256-GCM; only masked values are ever returned by the API. |
+| 🖥️ **Local dashboard** | React UI to manage providers, keys, models, chains, connect configs, and live logs. |
+| 🧾 **One-click tool setup** | Generates and (optionally) writes config for OpenCode, Continue, and Aider with automatic backup + diff preview. |
+
+---
+
+## 🚀 Quickstart
 
 ### Prerequisites
-- Node.js 20 or higher
 
-### Running via npx
+- **Node.js 20 or newer** ([download](https://nodejs.org))
+- At least one provider API key (OpenAI, Anthropic, Google, Groq, DeepSeek, OpenRouter, …) — or a local [Ollama](https://ollama.com) / [LM Studio](https://lmstudio.ai) install
+
+### Install & run
+
 ```bash
 npx nonstop-router
 ```
 
-On first launch, NonStop Router starts the gateway on `127.0.0.1:4000` and opens the dashboard in your default browser.
+That's it. The gateway starts on `http://127.0.0.1:4000` and opens the dashboard in your browser.
 
-### Running from Source
+### Global install (optional)
+
 ```bash
-git clone https://github.com/skrelectronics/nonstop-router.git
+npm install -g nonstop-router
+nonstop-router
+```
+
+### CLI options
+
+```text
+-p, --port <number>   Port to run on (default: 4000, or the PORT env var)
+    --host <string>   Interface to bind (default: 127.0.0.1)
+    --no-open         Do not open the dashboard in a browser
+-v, --version         Print version
+-h, --help            Show help
+```
+
+### From source
+
+```bash
+git clone https://github.com/skr-electronics-lab/nonstop-router.git
 cd nonstop-router
 npm install
 npm run build
 npm start
 ```
 
-### Docker Deployment
+### Docker
+
 ```bash
 docker build -t nonstop-router .
-docker run -d -p 4000:4000 -v nonstop-data:/root/.nonstop nonstop-router
+docker run -d --name nonstop-router \
+  -p 4000:4000 \
+  -v nonstop-data:/home/nonstop/.nonstop \
+  nonstop-router
 ```
 
 ---
 
-## Failover Mechanics
+## 🔧 First-time setup
 
-```
-Client Request (OpenCode, Claude Code, Codex, Cline)
-                 |
-                 v
-       NonStop Router Gateway (Port 4000)
-                 |
-                 v
-       Chain Resolution (e.g. "auto")
-                 |
-                 +-----------------------------------------+
-                 | Target 1: Primary Model (Key Pool)      |
-                 | -> Key 1                                |
-                 |    [Failure: 429, 5xx, 401, Timeout]    |
-                 | -> Key 2 (Immediate local retry)        |
-                 |    [Failure: Cooldown triggered]        |
-                 +-----------------------------------------+
-                                 |
-                                 v
-                 +-----------------------------------------+
-                 | Target 2: Fallback Model (Key Pool)     |
-                 | -> Key 1 -> Success (HTTP 200 OK)       |
-                 +-----------------------------------------+
-                                 |
-                                 v
-                 Client receives clean, uninterrupted stream
-```
+1. Start the router (`npx nonstop-router`).
+2. Open the dashboard at **http://127.0.0.1:4000**.
+3. Go to **Providers → Add Provider**, pick a preset (or paste a custom base URL), and enter an API key. Models are discovered automatically.
+4. (Optional) Add more keys to a provider to enable key pooling, or add multiple providers.
+5. Go to **Chains** and set your failover order — or click **Auto-Build Free Chain** to prefer free models.
+6. Go to **Connect**, copy the snippet for your tool (or use one-click setup), and point it at `http://127.0.0.1:4000/v1` with your **gateway key**.
 
-1. **Failure Triggers**:
-   - HTTP 429 Too Many Requests
-   - HTTP 500, 502, 503, 504 Server Errors
-   - HTTP 401 / 403 Authentication Errors
-   - Connection timeouts and socket drops
-   - Stream failures occurring prior to initial token emission
-2. **Fallback Sequence**:
-   - Next available healthy key on the active model target.
-   - Next configured target model in the chain order.
-3. **Recovery & Probing**:
-   - Targets respect upstream `Retry-After` and rate-limit reset headers.
-   - When headers are absent, exponential backoff is applied (30s, 60s, 120s, up to 300s).
-   - An active background worker continuously probes cooling and down targets using minimal test requests, restoring healthy targets automatically.
+> The **gateway key** (starts with `nsk_live_`) is different from your provider keys. It authenticates *your tools* to the router and is generated on first run (see **Settings → Local Gateway API Keys**).
 
 ---
 
-## Tool Setup Instructions
+## 🧭 How It Works
 
-### 1. OpenCode CLI
-Use the One-Click writer in the dashboard Connect page, or update `~/.config/opencode/opencode.jsonc`:
-```json
-{
-  "providers": {
-    "nonstop": {
-      "name": "NonStop Router",
-      "package": "@opencode/ai/providers/openai-compatible",
-      "settings": {
-        "baseURL": "http://127.0.0.1:4000/v1",
-        "apiKey": "YOUR_LOCAL_GATEWAY_KEY"
-      },
-      "models": {
-        "auto": {
-          "name": "auto (NonStop)",
-          "capabilities": {
-            "tools": true,
-            "input": ["text", "image"],
-            "output": ["text"]
-          }
-        }
-      }
-    }
-  },
-  "model": "nonstop/auto"
-}
+```
+   OpenCode / Claude Code / Codex / Cline / Aider
+                        │
+                        │  model = "auto"
+                        ▼
+        ┌───────────────────────────────────┐
+        │   NonStop Router  :4000           │
+        │   (localhost only)                │
+        └───────────────────────────────────┘
+                        │
+             Chain resolution for "auto"
+                        │
+    ┌───────────────────┼────────────────────┐
+    ▼                   ▼                    ▼
+ Target 1            Target 2             Target 3
+ Provider A          Provider B           Local (Ollama)
+ ┌──────────┐        ┌──────────┐         ┌──────────┐
+ │ Key 1 ✅ │        │ Key 1 ✅ │         │ llama3   │
+ │ Key 2 ⏳ │        │          │         │          │
+ └──────────┘        └──────────┘         └──────────┘
+    │ 429 / 5xx / timeout
+    └──────────► try Key 2 ──► try Target 2 ──► Target 3 ──► ✉ clean error
 ```
 
-### 2. Claude Code
-Set the environment variables before starting Claude Code:
+### Failure triggers
+
+| Trigger | Action |
+|---|---|
+| `429 Too Many Requests` | Cooldown the key (honoring `Retry-After` when present), try the next key. |
+| `500 / 502 / 503 / 504` | Cooldown the key with exponential backoff, try the next key. |
+| `401 / 403` | Mark the key **down**, try the next key. |
+| Connection timeout / socket drop | Cooldown the key, try the next key. |
+| Stream dies before the first token | Retry the whole request on the next target. |
+
+### Recovery
+
+- Cooling keys return **automatically** when their cooldown expires.
+- A background **health prober** actively tests down/cooling keys and restores them when healthy.
+- `Retry-After` and `x-ratelimit-reset-*` headers are respected; otherwise exponential backoff (`30s → 60s → 120s → …`, capped at `300s`) is applied.
+
+### Chain modes
+
+- **Priority** (default): always returns to the highest-priority healthy target as soon as it recovers.
+- **Sticky**: latches onto the first target that works and stays there until it fails, maximizing cache/session continuity.
+
+---
+
+## 🔌 Supported Tools
+
+| Tool | How to connect |
+|---|---|
+| **OpenCode CLI** | One-click writer in the dashboard, or merge the generated provider block into `~/.config/opencode/opencode.jsonc`. |
+| **Claude Code** | `ANTHROPIC_BASE_URL=http://127.0.0.1:4000`, `ANTHROPIC_AUTH_TOKEN=<gateway key>`, `ANTHROPIC_MODEL=auto`. |
+| **Codex CLI** | `OPENAI_BASE_URL=http://127.0.0.1:4000/v1`, `OPENAI_API_KEY=<gateway key>`. |
+| **Cline / Roo Code** | Provider: *OpenAI Compatible* · Base URL `http://127.0.0.1:4000/v1` · Model `auto`. |
+| **Continue** | `provider: openai`, `apiBase: http://127.0.0.1:4000/v1`. |
+| **Aider** | `OPENAI_API_BASE=http://127.0.0.1:4000/v1`, `OPENAI_API_KEY=<gateway key>`, `aider --model openai/auto`. |
+| **Zed** | `language_models.openai.api_url = http://127.0.0.1:4000/v1`. |
+| **Any OpenAI SDK** | Point `base_url` at `http://127.0.0.1:4000/v1`. |
+
+The **Connect** page in the dashboard generates ready-to-paste snippets for all of the above and writes config files (with a backup and diff preview) for OpenCode, Continue, and Aider.
+
+---
+
+## 🌐 Supported Providers
+
+Presets ship for **Token Harbor, OpenAI, Anthropic, DeepSeek, OpenRouter, Groq, Together AI, Mistral, xAI (Grok), Google Gemini, Ollama, and LM Studio**. Any OpenAI-compatible endpoint works too — just enter its base URL.
+
+---
+
+## 📚 API Reference
+
+All gateway endpoints require your **gateway key** via `Authorization: Bearer <key>` or `x-api-key`.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/v1/chat/completions` | OpenAI Chat Completions (streaming + non-streaming). |
+| `POST` | `/v1/messages` | Anthropic Messages API (for Claude Code). |
+| `POST` | `/v1/responses` | OpenAI Responses API (for Codex CLI). |
+| `GET` | `/v1/models` | Lists chains, enabled models, and universal aliases. |
+| `POST` | `/mcp` | Model Context Protocol (JSON-RPC) endpoint. |
+
+Request `model: "auto"` to use the default failover chain, or the name of any specific chain or model.
+
 ```bash
-export ANTHROPIC_BASE_URL="http://127.0.0.1:4000"
-export ANTHROPIC_AUTH_TOKEN="YOUR_LOCAL_GATEWAY_KEY"
-export ANTHROPIC_MODEL="auto"
+curl http://127.0.0.1:4000/v1/chat/completions \
+  -H "Authorization: Bearer $NONSTOP_GATEWAY_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-### 3. Codex CLI
+The management API under `/api/*` powers the dashboard and requires the admin token (injected into the dashboard page).
+
+---
+
+## 🔒 Security
+
+- **Localhost by default.** The gateway binds to `127.0.0.1`. Enabling LAN access is an explicit, clearly-labelled opt-in in Settings.
+- **Encrypted at rest.** Provider keys are encrypted with **AES-256-GCM**. The 256-bit master key lives in `~/.nonstop/master.key` with restrictive permissions.
+- **Keys are masked.** Upstream and gateway keys are shown masked (`sk-…1234`) everywhere and are never returned by list/detail APIs.
+- **Admin + gateway auth.** `/api/*` requires an admin token; `/v1/*` requires a gateway key. Tokens are compared in constant time.
+- **No telemetry.** Nothing about your usage leaves your machine. The only outbound calls are the ones you configure, plus a metadata fetch from `models.dev` (cached locally, and skippable offline).
+
+> **Never expose the gateway directly to the public internet.** It is designed for local/trusted-network use. If you enable LAN access, put it behind a reverse proxy with TLS and its own authentication.
+
+---
+
+## ⚙️ Configuration
+
+Settings live in the dashboard (**Settings**) and in the SQLite DB at `~/.nonstop/router.sqlite`. Highlights:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `defaultRequestTimeoutMs` | `60000` | Per-attempt upstream timeout before failing over. |
+| `cooldownBaseMs` / `cooldownMaxMs` | `30000` / `300000` | Exponential backoff bounds for failing keys. |
+| `healthProbeIntervalMs` | `30000` | How often down keys are re-probed. |
+| `enableCache` / `cacheTtlMs` / `cacheMaxEntries` | `true` / `24h` / `2000` | Exact-match response cache. |
+| `enableRateGovernor` / `rateGovernorRpm` | `true` / `25` | Rolling per-key RPM ceiling. |
+| `enablePromptOptimizer` | `false` | Lossy prompt trimming (off by default). |
+| `storePayloads` | `false` | Store request/response bodies in logs (privacy-sensitive). |
+| `allowLan` | `false` | Bind to `0.0.0.0` instead of `127.0.0.1`. |
+| `chainAutoPolicy` | `free_only` | Default policy for auto-built chains. |
+
+### Data locations
+
+| Path | Contents |
+|---|---|
+| `~/.nonstop/router.sqlite` | Providers, keys, models, chains, logs, settings. |
+| `~/.nonstop/master.key` | AES-256 master key for encrypting provider keys. |
+
+Back up `~/.nonstop/` to preserve your configuration.
+
+---
+
+## 🧑‍💻 Development
+
 ```bash
-export OPENAI_BASE_URL="http://127.0.0.1:4000/v1"
-export OPENAI_API_KEY="YOUR_LOCAL_GATEWAY_KEY"
-codex --model auto
+npm install
+npm run dev        # server (tsx watch) + Vite dev client
+npm run typecheck  # TypeScript checks for server + client
+npm run build      # production build
+npm start          # run the built server
 ```
 
-### 4. Cline & Roo Code (VS Code Extensions)
-- Provider: `OpenAI Compatible`
-- Base URL: `http://127.0.0.1:4000/v1`
-- API Key: `YOUR_LOCAL_GATEWAY_KEY`
-- Model ID: `auto`
+Project layout:
 
-### 5. Continue
-In `~/.continue/config.json`:
-```json
-{
-  "models": [
-    {
-      "title": "NonStop Router (auto)",
-      "provider": "openai",
-      "model": "auto",
-      "apiKey": "YOUR_LOCAL_GATEWAY_KEY",
-      "apiBase": "http://127.0.0.1:4000/v1"
-    }
-  ]
-}
 ```
-
-### 6. Aider
-```bash
-export OPENAI_API_BASE="http://127.0.0.1:4000/v1"
-export OPENAI_API_KEY="YOUR_LOCAL_GATEWAY_KEY"
-aider --model openai/auto
-```
-
-### 7. Zed
-In `~/.config/zed/settings.json`:
-```json
-{
-  "language_models": {
-    "openai": {
-      "version": "1",
-      "api_url": "http://127.0.0.1:4000/v1",
-      "available_models": [
-        {
-          "name": "auto",
-          "display_name": "NonStop Router (auto)",
-          "max_tokens": 128000
-        }
-      ]
-    }
-  }
-}
+src/
+  server/   Hono gateway, router engine, providers, cache, MCP, crypto
+  client/   React + Vite dashboard
+  shared/   Types shared by server and client
 ```
 
 ---
 
-## Security Architecture
+## ❓ FAQ
 
-- **Encrypted Storage**: Upstream provider API keys are encrypted at rest using AES-256-GCM with authenticated tags. The 256-bit master key is stored locally with restricted permissions (`0600`) at `~/.nonstop/master.key`.
-- **Key Masking**: Upstream keys and local gateway keys are masked across all UI views and API responses (`sk-...1234`).
-- **Localhost Default**: Binds to `127.0.0.1`. Remote network access requires explicitly enabling the LAN setting in the dashboard.
-- **Database Durability**: SQLite in WAL mode with normalized transactions (`better-sqlite3`).
+<details>
+<summary><strong>Is my data sent anywhere?</strong></summary>
+
+No. The router runs locally and stores everything in `~/.nonstop`. Besides the providers you configure, the only outbound request is an optional model-metadata fetch from `models.dev` (cached for 24h, and it degrades gracefully offline).
+</details>
+
+<details>
+<summary><strong>What's the difference between the gateway key and my provider keys?</strong></summary>
+
+Your **provider keys** (OpenAI, Anthropic, …) are stored encrypted and used to call the upstreams. The **gateway key** (`nsk_live_…`) is what your local tools use to authenticate to the router. They never leave your machine.
+</details>
+
+<details>
+<summary><strong>Can it fail over mid-stream?</strong></summary>
+
+If the upstream dies **before the first token**, the router transparently retries on the next target. Once tokens have been delivered, failover can't happen without corrupting the client's output — enable **Restart on Mid-Stream Failure** in Settings if you want the request restarted from scratch on the fallback target (at the cost of discarding the partial response).
+</details>
+
+<details>
+<summary><strong>Does it work offline / with local models?</strong></summary>
+
+Yes. Point it at Ollama (`http://127.0.0.1:11434/v1`) or LM Studio (`http://127.0.0.1:1234/v1`). Local runners are automatically demoted to the end of every chain so they act as an always-available safety net.
+</details>
+
+<details>
+<summary><strong>Why does npm install need a compiler?</strong></summary>
+
+`better-sqlite3` is a native module. Prebuilt binaries exist for common platforms; otherwise a C++ toolchain is used. The Docker image installs the build deps for you.
+</details>
 
 ---
 
-## License
+## 🤝 Contributing
 
-MIT License. Free and open source.
+Issues and pull requests are welcome.
+
+1. Fork the repo and create a feature branch.
+2. Run `npm run typecheck` and `npm run build` before opening a PR.
+3. Keep changes focused and consistent with the surrounding code.
+
+---
+
+## 📄 License
+
+Licensed under the **GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)**.
+
+You are free to use, study, modify, and self-host this software. If you distribute it — or run a modified version as a network service — you **must** release your source under the same license and **keep the original authorship and copyright notices intact**. You may not take this project, rebrand it, and present it as your own. See [LICENSE](LICENSE) for the full text.
+
+<p align="center">
+  <sub>Built for developers who are tired of <code>429 Too Many Requests</code>.</sub>
+</p>

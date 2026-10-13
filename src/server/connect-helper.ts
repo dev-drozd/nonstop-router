@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { getDb } from './db.js';
 
 export interface ToolConfigSnippet {
   id: string;
@@ -17,6 +18,8 @@ export interface ToolConfigSnippet {
 export function generateToolConfigs(baseUrl: string, gatewayKey: string, chainName: string): ToolConfigSnippet[] {
   const v1Url = `${baseUrl.replace(/\/+$/, '')}/v1`;
   const rootUrl = baseUrl.replace(/\/+$/, '');
+  // Never bake a real secret into a copyable snippet; the one-click writers inject it.
+  const keyPlaceholder = 'YOUR_GATEWAY_KEY';
 
   return [
     {
@@ -34,7 +37,7 @@ export function generateToolConfigs(baseUrl: string, gatewayKey: string, chainNa
             package: "@opencode/ai/providers/openai-compatible",
             settings: {
               baseURL: v1Url,
-              apiKey: gatewayKey,
+              apiKey: keyPlaceholder,
             },
             models: {
               [chainName]: {
@@ -59,7 +62,7 @@ export function generateToolConfigs(baseUrl: string, gatewayKey: string, chainNa
       description: "Anthropic's terminal agent for coding tasks",
       docUrl: 'https://docs.anthropic.com/en/docs/claude-code',
       configType: 'env',
-      snippet: `export ANTHROPIC_BASE_URL="${rootUrl}"\nexport ANTHROPIC_AUTH_TOKEN="${gatewayKey}"\nexport ANTHROPIC_MODEL="${chainName}"`,
+      snippet: `export ANTHROPIC_BASE_URL="${rootUrl}"\nexport ANTHROPIC_AUTH_TOKEN="${keyPlaceholder}"\nexport ANTHROPIC_MODEL="${chainName}"`,
       instructions: 'Run these export commands in your shell before launching claude, or put them in ~/.bashrc / PowerShell $PROFILE.',
     },
     {
@@ -69,7 +72,7 @@ export function generateToolConfigs(baseUrl: string, gatewayKey: string, chainNa
       description: 'OpenAI command line coding tool using Responses API and chat completions',
       docUrl: 'https://github.com/openai/codex',
       configType: 'env',
-      snippet: `export OPENAI_BASE_URL="${v1Url}"\nexport OPENAI_API_KEY="${gatewayKey}"\nexport CODEX_MODEL="${chainName}"`,
+      snippet: `export OPENAI_BASE_URL="${v1Url}"\nexport OPENAI_API_KEY="${keyPlaceholder}"\nexport CODEX_MODEL="${chainName}"`,
       instructions: 'Set the base URL and API key in your terminal session.',
     },
     {
@@ -82,7 +85,7 @@ export function generateToolConfigs(baseUrl: string, gatewayKey: string, chainNa
       snippet: JSON.stringify({
         apiProvider: "openai-compatible",
         apiBaseUrl: v1Url,
-        apiKey: gatewayKey,
+        apiKey: keyPlaceholder,
         customModelId: chainName,
       }, null, 2),
       instructions: 'In Cline extension settings, choose "OpenAI Compatible", set Base URL to ' + v1Url + ', and enter the key.',
@@ -97,7 +100,7 @@ export function generateToolConfigs(baseUrl: string, gatewayKey: string, chainNa
       snippet: JSON.stringify({
         apiProvider: "openai-compatible",
         baseUrl: v1Url,
-        apiKey: gatewayKey,
+        apiKey: keyPlaceholder,
         modelId: chainName,
       }, null, 2),
       instructions: 'In Roo Code settings, select "OpenAI Compatible" provider and paste the endpoint and key.',
@@ -116,7 +119,7 @@ export function generateToolConfigs(baseUrl: string, gatewayKey: string, chainNa
             title: `NonStop Router (${chainName})`,
             provider: "openai",
             model: chainName,
-            apiKey: gatewayKey,
+            apiKey: keyPlaceholder,
             apiBase: v1Url,
           },
         ],
@@ -130,7 +133,7 @@ export function generateToolConfigs(baseUrl: string, gatewayKey: string, chainNa
       description: 'AI pair programming in your terminal',
       docUrl: 'https://aider.chat/docs/install.html',
       configType: 'cli',
-      snippet: `export OPENAI_API_BASE="${v1Url}"\nexport OPENAI_API_KEY="${gatewayKey}"\naider --model openai/${chainName}`,
+      snippet: `export OPENAI_API_BASE="${v1Url}"\nexport OPENAI_API_KEY="${keyPlaceholder}"\naider --model openai/${chainName}`,
       instructions: 'Export the environment variables and run aider with the specified model.',
     },
     {
@@ -165,7 +168,7 @@ export function generateToolConfigs(baseUrl: string, gatewayKey: string, chainNa
       description: 'Direct HTTP or any standard OpenAI SDK client',
       docUrl: 'https://platform.openai.com/docs/api-reference',
       configType: 'cli',
-      snippet: `curl ${v1Url}/chat/completions \\\n  -H "Authorization: Bearer ${gatewayKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"model": "${chainName}", "messages": [{"role": "user", "content": "Hello!"}]}'`,
+      snippet: `curl ${v1Url}/chat/completions \\\n  -H "Authorization: Bearer ${keyPlaceholder}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"model": "${chainName}", "messages": [{"role": "user", "content": "Hello!"}]}'`,
       instructions: 'Standard OpenAI-compatible completions endpoint with streaming support.',
     },
   ];
@@ -211,6 +214,42 @@ export function writeToOpenCodeConfig(v1Url: string, gatewayKey: string, chainNa
 
   if (!parsed.providers) parsed.providers = {};
 
+  const db = getDb();
+  let dbModels: any[] = [];
+  try {
+    dbModels = db.prepare('SELECT model_id, name, supports_tools, context_window, is_free FROM models WHERE enabled = 1 ORDER BY is_free DESC, model_id ASC').all() as any[];
+  } catch {}
+
+  const dynamicModels: Record<string, any> = {
+    [chainName]: {
+      name: `${chainName} (Failover Pool)`,
+      capabilities: {
+        tools: true,
+        input: ["text", "image"],
+        output: ["text"],
+      },
+      limit: {
+        context: 200000,
+        output: 32000,
+      },
+    },
+  };
+
+  for (const m of dbModels) {
+    dynamicModels[m.model_id] = {
+      name: m.name || m.model_id,
+      capabilities: {
+        tools: Boolean(m.supports_tools),
+        input: ["text", "image"],
+        output: ["text"],
+      },
+      limit: {
+        context: m.context_window || 64000,
+        output: 16000,
+      },
+    };
+  }
+
   // Add / merge nonstop provider
   parsed.providers.nonstop = {
     name: "NonStop Router",
@@ -221,22 +260,13 @@ export function writeToOpenCodeConfig(v1Url: string, gatewayKey: string, chainNa
     },
     models: {
       ...(parsed.providers.nonstop?.models || {}),
-      [chainName]: {
-        name: `${chainName} (NonStop)`,
-        capabilities: {
-          tools: true,
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 200000,
-          output: 32000,
-        },
-      },
+      ...dynamicModels,
     },
   };
 
-  parsed.model = `nonstop/${chainName}`;
+  if (!parsed.model) {
+    parsed.model = `nonstop/${chainName}`;
+  }
   const updatedText = JSON.stringify(parsed, null, 2);
 
   let backupPath: string | null = null;
@@ -256,3 +286,121 @@ export function writeToOpenCodeConfig(v1Url: string, gatewayKey: string, chainNa
     updatedText,
   };
 }
+
+export function writeToContinueConfig(
+  baseUrl: string,
+  gatewayKey: string,
+  chainName: string = 'auto',
+  execute = false
+): {
+  filePath: string;
+  backupPath: string | null;
+  hasChanged: boolean;
+  originalText: string;
+  updatedText: string;
+} {
+  const v1Url = `${baseUrl.replace(/\/+$/, '')}/v1`;
+  const targetPath = path.join(os.homedir(), '.continue', 'config.json');
+
+  let originalText = '';
+  let parsed: any = {};
+
+  if (fs.existsSync(targetPath)) {
+    originalText = fs.readFileSync(targetPath, 'utf8');
+    try {
+      parsed = JSON.parse(originalText);
+    } catch {
+      parsed = {};
+    }
+  } else {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    parsed = { models: [] };
+  }
+
+  if (!Array.isArray(parsed.models)) parsed.models = [];
+
+  // Remove existing nonstop entry if present
+  parsed.models = parsed.models.filter((m: any) => m.title !== 'NonStop Router');
+
+  // Insert NonStop model at the top
+  parsed.models.unshift({
+    title: 'NonStop Router',
+    provider: 'openai',
+    model: chainName,
+    apiBase: v1Url,
+    apiKey: gatewayKey,
+  });
+
+  const updatedText = JSON.stringify(parsed, null, 2);
+  let backupPath: string | null = null;
+  if (execute) {
+    if (fs.existsSync(targetPath)) {
+      backupPath = `${targetPath}.bak.${Date.now()}`;
+      fs.copyFileSync(targetPath, backupPath);
+    }
+    fs.writeFileSync(targetPath, updatedText, 'utf8');
+  }
+
+  return {
+    filePath: targetPath,
+    backupPath,
+    hasChanged: originalText !== updatedText,
+    originalText,
+    updatedText,
+  };
+}
+
+export function writeToAiderConfig(
+  baseUrl: string,
+  gatewayKey: string,
+  chainName: string = 'auto',
+  execute = false
+): {
+  filePath: string;
+  backupPath: string | null;
+  hasChanged: boolean;
+  originalText: string;
+  updatedText: string;
+} {
+  const v1Url = `${baseUrl.replace(/\/+$/, '')}/v1`;
+  const targetPath = path.join(os.homedir(), '.aider.conf.yml');
+
+  let originalText = '';
+  if (fs.existsSync(targetPath)) {
+    originalText = fs.readFileSync(targetPath, 'utf8');
+  } else {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  }
+
+  const lines = originalText.split('\n').filter(l => (
+    !l.startsWith('openai-api-base:') &&
+    !l.startsWith('openai-api-key:') &&
+    !l.startsWith('model:')
+  ));
+
+  lines.unshift(
+    `# NonStop Router Configuration`,
+    `openai-api-base: ${v1Url}`,
+    `openai-api-key: ${gatewayKey}`,
+    `model: openai/${chainName}`
+  );
+
+  const updatedText = lines.join('\n').trim() + '\n';
+  let backupPath: string | null = null;
+  if (execute) {
+    if (fs.existsSync(targetPath)) {
+      backupPath = `${targetPath}.bak.${Date.now()}`;
+      fs.copyFileSync(targetPath, backupPath);
+    }
+    fs.writeFileSync(targetPath, updatedText, 'utf8');
+  }
+
+  return {
+    filePath: targetPath,
+    backupPath,
+    hasChanged: originalText !== updatedText,
+    originalText,
+    updatedText,
+  };
+}
+

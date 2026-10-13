@@ -103,16 +103,26 @@ export function getAvailableKeysForProvider(providerId: string, strategy: KeySel
     }
   }
 
-  // Sort keys based on selection strategy
-  if (strategy === 'fill-first') {
-    // Keep insertion order (or primary first)
-    return validKeys;
-  } else if (strategy === 'least-used') {
-    return validKeys.sort((a, b) => a.usageCount - b.usageCount);
-  } else {
-    // round-robin: sort by usage count or pseudo-randomize / rotate
+  // Sort keys deterministically. Round-robin rotation is applied by the router
+  // engine at dispatch time; least-used sorts by usage here.
+  if (strategy === 'least-used') {
     return validKeys.sort((a, b) => a.usageCount - b.usageCount);
   }
+  // fill-first and round-robin both preserve insertion order at this layer.
+  return validKeys;
+}
+
+/**
+ * Records per-key token usage for cost/accounting views.
+ */
+export function addKeyTokens(keyId: string, tokens: number): void {
+  if (!keyId || !Number.isFinite(tokens) || tokens <= 0) return;
+  const db = getDb();
+  db.prepare(`
+    UPDATE provider_keys
+    SET tokens_used = COALESCE(tokens_used, 0) + ?, last_used_at = ?
+    WHERE id = ?
+  `).run(Math.round(tokens), Date.now(), keyId);
 }
 
 /**

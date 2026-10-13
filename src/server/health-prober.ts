@@ -1,9 +1,50 @@
 import { getDb, getSettings } from './db.js';
 import { decryptKey } from './crypto.js';
 import { testProviderConnection } from './provider-service.js';
+import type Database from 'better-sqlite3';
 
 let proberTimer: NodeJS.Timeout | null = null;
 let isProbing = false;
+
+// Persistent prepared statements cache to avoid GC finalizer collisions on Node 24
+let stmts: {
+  getExpiredCooldown?: Database.Statement;
+  recoverKey?: Database.Statement;
+  getCandidates?: Database.Statement;
+  markHealthy?: Database.Statement;
+  markProbing?: Database.Statement;
+  restoreStatus?: Database.Statement;
+} = {};
+
+function getStatements(db: Database.Database) {
+  if (!stmts.getExpiredCooldown) {
+    stmts.getExpiredCooldown = db.prepare(`
+      SELECT id, provider_id, label
+      FROM provider_keys
+      WHERE status = 'cooling_down' AND cooldown_until IS NOT NULL AND cooldown_until <= ?
+    `);
+    stmts.recoverKey = db.prepare("UPDATE provider_keys SET status = 'healthy', cooldown_until = NULL WHERE id = ?");
+    stmts.getCandidates = db.prepare(`
+      SELECT pk.id as key_id, pk.provider_id, pk.label, pk.key_encrypted, pk.status,
+             p.name as provider_name, p.protocol, p.base_url
+      FROM provider_keys pk
+      JOIN providers p ON pk.provider_id = p.id
+      WHERE pk.status IN ('down', 'cooling_down')
+    `);
+    stmts.markHealthy = db.prepare(`
+      UPDATE provider_keys
+      SET status = 'healthy',
+          cooldown_until = NULL,
+          consecutive_failures = 0,
+          last_error = NULL,
+          updated_at = ?
+      WHERE id = ?
+    `);
+    stmts.markProbing = db.prepare("UPDATE provider_keys SET status = 'probing', updated_at = ? WHERE id = ?");
+    stmts.restoreStatus = db.prepare("UPDATE provider_keys SET status = ?, updated_at = ? WHERE id = ?");
+  }
+  return stmts;
+}
 
 export function startHealthProber(broadcastFn?: (event: string, data: any) => void): void {
   if (proberTimer) clearInterval(proberTimer);
@@ -14,31 +55,21 @@ export function startHealthProber(broadcastFn?: (event: string, data: any) => vo
 
     try {
       const db = getDb();
-      const settings = getSettings();
+      const s = getStatements(db);
       const now = Date.now();
 
       // 1. Recover keys whose cooldown has expired
-      const expiredCooldownKeys = db.prepare(`
-        SELECT id, provider_id, label
-        FROM provider_keys
-        WHERE status = 'cooling_down' AND cooldown_until IS NOT NULL AND cooldown_until <= ?
-      `).all(now) as any[];
+      const expiredCooldownKeys = s.getExpiredCooldown!.all(now) as any[];
 
       for (const k of expiredCooldownKeys) {
-        db.prepare("UPDATE provider_keys SET status = 'healthy', cooldown_until = NULL WHERE id = ?").run(k.id);
+        s.recoverKey!.run(k.id);
         if (broadcastFn) {
           broadcastFn('key_recovered', { keyId: k.id, providerId: k.provider_id, label: k.label, reason: 'cooldown_expired' });
         }
       }
 
       // 2. Actively probe keys marked 'down' or 'cooling_down'
-      const candidates = db.prepare(`
-        SELECT pk.id as key_id, pk.provider_id, pk.label, pk.key_encrypted, pk.status,
-               p.name as provider_name, p.protocol, p.base_url
-        FROM provider_keys pk
-        JOIN providers p ON pk.provider_id = p.id
-        WHERE pk.status IN ('down', 'cooling_down')
-      `).all() as any[];
+      const candidates = s.getCandidates!.all() as any[];
 
       for (const item of candidates) {
         let rawKey: string;
@@ -48,20 +79,14 @@ export function startHealthProber(broadcastFn?: (event: string, data: any) => vo
           continue;
         }
 
-        // Test with real minimal endpoint
+        // Mark as probing so concurrent dispatch avoids racing a key mid-probe.
+        s.markProbing!.run(Date.now(), item.key_id);
+
         const testRes = await testProviderConnection(item.protocol, item.base_url, rawKey);
 
         if (testRes.success) {
           // Probe succeeded! Mark healthy
-          db.prepare(`
-            UPDATE provider_keys
-            SET status = 'healthy',
-                cooldown_until = NULL,
-                consecutive_failures = 0,
-                last_error = NULL,
-                updated_at = ?
-            WHERE id = ?
-          `).run(Date.now(), item.key_id);
+          s.markHealthy!.run(Date.now(), item.key_id);
 
           if (broadcastFn) {
             broadcastFn('target_recovered', {
@@ -72,6 +97,9 @@ export function startHealthProber(broadcastFn?: (event: string, data: any) => vo
               latencyMs: testRes.latencyMs,
             });
           }
+        } else {
+          // Probe failed: restore the previous status so cooldowns keep elapsing.
+          s.restoreStatus!.run(item.status, Date.now(), item.key_id);
         }
       }
     } catch (err: any) {
@@ -82,8 +110,11 @@ export function startHealthProber(broadcastFn?: (event: string, data: any) => vo
   };
 
   const settings = getSettings();
-  const interval = Math.max(10000, settings.healthProbeIntervalMs || 30000);
+  const interval = Math.max(15000, settings.healthProbeIntervalMs || 30000);
   proberTimer = setInterval(runProbeCycle, interval);
+  if (proberTimer && typeof proberTimer.unref === 'function') {
+    proberTimer.unref();
+  }
 }
 
 export function stopHealthProber(): void {

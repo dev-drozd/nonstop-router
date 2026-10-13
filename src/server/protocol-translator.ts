@@ -285,3 +285,304 @@ export function translateChatCompletionToResponsesApi(openAiResp: any): any {
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Google Gemini (generativelanguage.googleapis.com) translation
+// ---------------------------------------------------------------------------
+
+function contentToText(content: any): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map((c: any) => (typeof c === 'string' ? c : c?.text || '')).join('');
+  }
+  return '';
+}
+
+/**
+ * Translates an OpenAI Chat Completions payload into a Gemini generateContent body.
+ */
+export function translateOpenAIToGemini(openAiPayload: any): any {
+  const messages: any[] = Array.isArray(openAiPayload.messages) ? openAiPayload.messages : [];
+  const systemParts: string[] = [];
+  const contents: any[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      systemParts.push(contentToText(msg.content));
+      continue;
+    }
+
+    if (msg.role === 'tool') {
+      contents.push({
+        role: 'user',
+        parts: [{
+          functionResponse: {
+            name: msg.name || msg.tool_call_id || 'tool',
+            response: { result: contentToText(msg.content) },
+          },
+        }],
+      });
+      continue;
+    }
+
+    if (msg.role === 'assistant' && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+      const parts: any[] = [];
+      const text = contentToText(msg.content);
+      if (text) parts.push({ text });
+      for (const tc of msg.tool_calls) {
+        let args: any = {};
+        try { args = JSON.parse(tc.function?.arguments || '{}'); } catch { args = {}; }
+        parts.push({ functionCall: { name: tc.function?.name, args } });
+      }
+      contents.push({ role: 'model', parts });
+      continue;
+    }
+
+    contents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: contentToText(msg.content) }],
+    });
+  }
+
+  const body: any = { contents };
+
+  if (systemParts.filter(Boolean).length > 0) {
+    body.systemInstruction = { parts: [{ text: systemParts.filter(Boolean).join('\n\n') }] };
+  }
+
+  const generationConfig: any = {};
+  if (typeof openAiPayload.temperature === 'number') generationConfig.temperature = openAiPayload.temperature;
+  if (typeof openAiPayload.top_p === 'number') generationConfig.topP = openAiPayload.top_p;
+  if (typeof openAiPayload.max_tokens === 'number') generationConfig.maxOutputTokens = openAiPayload.max_tokens;
+  if (Array.isArray(openAiPayload.stop) && openAiPayload.stop.length) generationConfig.stopSequences = openAiPayload.stop;
+  if (Object.keys(generationConfig).length > 0) body.generationConfig = generationConfig;
+
+  if (Array.isArray(openAiPayload.tools) && openAiPayload.tools.length > 0) {
+    body.tools = [{
+      functionDeclarations: openAiPayload.tools
+        .filter((t: any) => t?.function)
+        .map((t: any) => ({
+          name: t.function.name,
+          description: t.function.description,
+          parameters: t.function.parameters || { type: 'object', properties: {} },
+        })),
+    }];
+  }
+
+  return body;
+}
+
+/**
+ * Translates a Gemini generateContent response into an OpenAI Chat Completion response.
+ */
+export function translateGeminiToOpenAI(geminiResp: any, modelId: string): any {
+  const candidate = geminiResp?.candidates?.[0] || {};
+  const parts: any[] = candidate?.content?.parts || [];
+
+  let text = '';
+  const toolCalls: any[] = [];
+  for (const part of parts) {
+    if (typeof part?.text === 'string') text += part.text;
+    if (part?.functionCall) {
+      toolCalls.push({
+        id: `call_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`,
+        type: 'function',
+        function: {
+          name: part.functionCall.name,
+          arguments: JSON.stringify(part.functionCall.args || {}),
+        },
+      });
+    }
+  }
+
+  let finishReason: string = 'stop';
+  const raw = String(candidate?.finishReason || '').toUpperCase();
+  if (raw === 'MAX_TOKENS') finishReason = 'length';
+  else if (raw === 'SAFETY' || raw === 'RECITATION') finishReason = 'content_filter';
+  else if (toolCalls.length > 0) finishReason = 'tool_calls';
+
+  const usageMeta = geminiResp?.usageMetadata || {};
+  const promptTokens = usageMeta.promptTokenCount || 0;
+  const completionTokens = usageMeta.candidatesTokenCount || 0;
+
+  return {
+    id: `chatcmpl_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`,
+    object: 'chat.completion',
+    created: Math.floor(Date.now() / 1000),
+    model: modelId,
+    choices: [{
+      index: 0,
+      message: {
+        role: 'assistant',
+        content: text || null,
+        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+      },
+      finish_reason: finishReason,
+    }],
+    usage: {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: usageMeta.totalTokenCount || (promptTokens + completionTokens),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI -> Anthropic request translation (for Anthropic-native upstreams)
+// ---------------------------------------------------------------------------
+
+/**
+ * Translates an OpenAI Chat Completions payload into an Anthropic Messages payload.
+ */
+export function translateOpenAIToAnthropicRequest(openAiPayload: any): any {
+  const messages: any[] = Array.isArray(openAiPayload.messages) ? openAiPayload.messages : [];
+  const systemParts: string[] = [];
+  const outMessages: any[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      systemParts.push(typeof msg.content === 'string' ? msg.content : contentToText(msg.content));
+      continue;
+    }
+
+    if (msg.role === 'tool') {
+      outMessages.push({
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: msg.tool_call_id,
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? ''),
+        }],
+      });
+      continue;
+    }
+
+    if (msg.role === 'assistant' && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+      const blocks: any[] = [];
+      const text = typeof msg.content === 'string' ? msg.content : contentToText(msg.content);
+      if (text) blocks.push({ type: 'text', text });
+      for (const tc of msg.tool_calls) {
+        let input: any = {};
+        try { input = JSON.parse(tc.function?.arguments || '{}'); } catch { input = {}; }
+        blocks.push({ type: 'tool_use', id: tc.id, name: tc.function?.name, input });
+      }
+      outMessages.push({ role: 'assistant', content: blocks });
+      continue;
+    }
+
+    outMessages.push({
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      content: typeof msg.content === 'string' ? msg.content : contentToText(msg.content),
+    });
+  }
+
+  const body: any = {
+    messages: outMessages,
+    max_tokens: openAiPayload.max_tokens ?? 4096,
+  };
+  if (systemParts.filter(Boolean).length > 0) body.system = systemParts.filter(Boolean).join('\n\n');
+  if (typeof openAiPayload.temperature === 'number') body.temperature = openAiPayload.temperature;
+  if (typeof openAiPayload.top_p === 'number') body.top_p = openAiPayload.top_p;
+  if (Array.isArray(openAiPayload.stop) && openAiPayload.stop.length) body.stop_sequences = openAiPayload.stop;
+  if (Array.isArray(openAiPayload.tools) && openAiPayload.tools.length > 0) {
+    body.tools = openAiPayload.tools
+      .filter((t: any) => t?.function)
+      .map((t: any) => ({
+        name: t.function.name,
+        description: t.function.description,
+        input_schema: t.function.parameters || { type: 'object', properties: {} },
+      }));
+  }
+  return body;
+}
+
+/**
+ * Translates an Anthropic Messages response into an OpenAI Chat Completion response.
+ */
+export function translateAnthropicResponseToOpenAI(anthropicResp: any, modelId: string): any {
+  const blocks: any[] = Array.isArray(anthropicResp?.content) ? anthropicResp.content : [];
+  let text = '';
+  const toolCalls: any[] = [];
+
+  for (const block of blocks) {
+    if (block?.type === 'text') text += block.text || '';
+    if (block?.type === 'tool_use') {
+      toolCalls.push({
+        id: block.id,
+        type: 'function',
+        function: { name: block.name, arguments: JSON.stringify(block.input || {}) },
+      });
+    }
+  }
+
+  let finishReason = 'stop';
+  if (anthropicResp?.stop_reason === 'tool_use') finishReason = 'tool_calls';
+  else if (anthropicResp?.stop_reason === 'max_tokens') finishReason = 'length';
+
+  return {
+    id: anthropicResp?.id || `chatcmpl_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`,
+    object: 'chat.completion',
+    created: Math.floor(Date.now() / 1000),
+    model: modelId,
+    choices: [{
+      index: 0,
+      message: {
+        role: 'assistant',
+        content: text || null,
+        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+      },
+      finish_reason: finishReason,
+    }],
+    usage: {
+      prompt_tokens: anthropicResp?.usage?.input_tokens || 0,
+      completion_tokens: anthropicResp?.usage?.output_tokens || 0,
+      total_tokens: (anthropicResp?.usage?.input_tokens || 0) + (anthropicResp?.usage?.output_tokens || 0),
+    },
+  };
+}
+
+/**
+ * Wraps an OpenAI Chat Completion as a valid one-shot OpenAI SSE stream so a
+ * non-streaming backend (Gemini, Anthropic) can satisfy a streaming client.
+ */
+export function chatCompletionToSSE(completion: any): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const choice = completion.choices?.[0] || {};
+  const message = choice.message || {};
+  const chunks: string[] = [];
+
+  chunks.push(`data: ${JSON.stringify({
+    id: completion.id,
+    object: 'chat.completion.chunk',
+    created: completion.created,
+    model: completion.model,
+    choices: [{ index: 0, delta: { role: 'assistant', content: message.content || '' }, finish_reason: null }],
+  })}\n\n`);
+
+  if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+    chunks.push(`data: ${JSON.stringify({
+      id: completion.id,
+      object: 'chat.completion.chunk',
+      created: completion.created,
+      model: completion.model,
+      choices: [{ index: 0, delta: { tool_calls: message.tool_calls }, finish_reason: null }],
+    })}\n\n`);
+  }
+
+  chunks.push(`data: ${JSON.stringify({
+    id: completion.id,
+    object: 'chat.completion.chunk',
+    created: completion.created,
+    model: completion.model,
+    choices: [{ index: 0, delta: {}, finish_reason: choice.finish_reason || 'stop' }],
+    usage: completion.usage,
+  })}\n\n`);
+  chunks.push('data: [DONE]\n\n');
+
+  return new ReadableStream({
+    start(controller) {
+      for (const c of chunks) controller.enqueue(encoder.encode(c));
+      controller.close();
+    },
+  });
+}
