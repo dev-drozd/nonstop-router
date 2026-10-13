@@ -182,6 +182,38 @@ docker run -d --name nonstop-router \
 - **Priority** (default): always returns to the highest-priority healthy target as soon as it recovers.
 - **Sticky**: latches onto the first target that works and stays there until it fails, maximizing cache/session continuity.
 
+### Key selection strategies
+
+A *chain* decides **which provider** gets the request; a provider's *selection strategy*
+decides **which key** inside that provider is used. Every strategy skips keys that are
+disabled, `down`, or still `cooling_down`, and every strategy fails over to the next key
+on error — the difference is only the order in which healthy keys are tried.
+
+| Strategy | How it picks a key | Best for | Trade-off |
+|---|---|---|---|
+| **Round Robin** *(default)* | Rotates through the key list, one request each, wrapping around. | Spreading load evenly across many keys of the same provider. | Can hit a key that has little quota left when others have plenty. |
+| **Fill First** | Always uses the first available key (in the order you added them) until it fails or cools down, then moves to the next. | Maximizing **prompt-cache** hits — one key keeps a warm context. | Concentrates load on one key; you hit its rate limit sooner. |
+| **Least Used** | Picks the key with the **lowest total request count** so far, keeping the pool balanced over time. | Mixed pools where keys have different quotas/ages and you want even wear. | Ignores recency — a key that just recovered may look "unused" and get hammered. |
+
+**Which is better?** There is no single winner — pick by what you value:
+
+- **Throughput / avoiding 429s across many keys → Round Robin.** Deterministic, fair, and
+  it exercises every key so a single hot key can't starve the pool. This is why it ships as
+  the default.
+- **Lowest latency & cost on cached prompts → Fill First.** Provider prompt caching is
+  per-key, so pinning traffic to one secondary key keeps its cache warm and cuts both
+  latency and input-token cost. Use it when one key has a large quota.
+- **Even wear / mixed quotas → Least Used.** Good when keys were added at different times or
+  have different tier limits and you want the long-run distribution to equalize.
+
+In practice the differences matter far less than **failover** — that is the whole point of
+NonStop Router. All three strategies cooldown a failing key and immediately retry the next
+one, so a bad key never blocks a request regardless of strategy. Start with **Round Robin**;
+switch to **Fill First** only if you specifically want prompt-cache locality on one key.
+
+> The Live Flow page shows the active strategy on each provider node, and the key pool
+> panel lists per-key token and request totals so you can see the distribution in real time.
+
 ---
 
 ## 🔌 Supported Tools
