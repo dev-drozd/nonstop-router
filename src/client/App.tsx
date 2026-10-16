@@ -13,6 +13,7 @@ import { FlowPage } from './pages/FlowPage.js';
 import { OnboardingWizard } from './components/OnboardingWizard.js';
 import { PlaygroundDrawer } from './components/PlaygroundDrawer.js';
 import { Menu, Play } from 'lucide-react';
+import { useI18n } from './i18n/index.js';
 
 export type LiveFlowEvent = {
   timestamp: number;
@@ -42,6 +43,7 @@ export type LiveFlowEvent = {
 };
 
 export const App: React.FC = () => {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [activePage, setActivePage] = useState<PageId>('overview');
   const [isDark, setIsDark] = useState(true);
@@ -146,7 +148,7 @@ export const App: React.FC = () => {
           <button
             onClick={() => setMobileOpen(true)}
             className="p-1.5 rounded-md hover:bg-bg-raised text-text-primary"
-            aria-label="Open menu"
+            aria-label={t('sidebar.openMenu')}
           >
             <Menu className="w-5 h-5" />
           </button>

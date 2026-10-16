@@ -16,6 +16,7 @@ import {
   Check,
   Sparkles,
 } from 'lucide-react';
+import { useI18n } from '../i18n/index.js';
 
 interface OnboardingWizardProps {
   onComplete: () => void;
@@ -31,6 +32,7 @@ const PRESETS = [
 ];
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, onClose }) => {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -180,8 +182,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
           <button
             onClick={handleDismiss}
             className="absolute right-0 top-0 p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-raised transition-colors"
-            title="Close (Skip for now)"
-            aria-label="Close setup modal"
+            title={t('wizard.closeSkip')}
+            aria-label={t('wizard.closeSetupModal')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -201,7 +203,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
           </div>
 
           <p className="text-xs text-text-secondary text-center max-w-sm">
-            High-availability gateway with automated failover for AI coding tools.
+            {t('wizard.subtitle')}
           </p>
 
           {/* Step indicators */}
@@ -218,7 +220,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
         {step === 1 && (
           <div className="space-y-4">
             <div className="text-xs text-text-secondary">
-              Step 1: Choose how to connect your first LLM provider.
+              {t('wizard.step1Title')}
             </div>
 
             {/* OpenCode Import Option */}
@@ -241,11 +243,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                   />
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold">Import from OpenCode Configuration</span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] bg-status-healthy/15 text-status-healthy font-normal">Detected</span>
+                      <span className="font-semibold">{t('wizard.importOpenCodeTitle')}</span>
+                      <span className="px-1.5 py-0.2 rounded text-[10px] bg-status-healthy/15 text-status-healthy font-normal">{t('wizard.detected')}</span>
                     </div>
                     <div className="text-[11px] text-text-secondary mt-1">
-                      Found provider: <strong className="text-text-primary">{importCandidates[0]?.name}</strong> ({importCandidates[0]?.modelCount} models, API key ready).
+                      {t('wizard.foundProvider', { name: importCandidates[0]?.name, count: importCandidates[0]?.modelCount })}
                     </div>
                   </div>
                 </label>
@@ -271,14 +273,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                   onChange={() => setProviderType('manual')}
                   className="text-accent focus:ring-accent"
                 />
-                <span className="font-semibold">Configure Provider Manually</span>
+                <span className="font-semibold">{t('wizard.manualTitle')}</span>
               </label>
 
               {providerType === 'manual' && (
                 <div className="space-y-3.5 pt-1 pl-6">
                   {/* Quick Presets */}
                   <div>
-                    <div className="text-[11px] text-text-muted mb-1.5">Quick Presets:</div>
+                    <div className="text-[11px] text-text-muted mb-1.5">{t('wizard.quickPresets')}</div>
                     <div className="flex flex-wrap gap-1.5">
                       {PRESETS.map(p => (
                         <button
@@ -301,13 +303,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                   <div>
                     <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-secondary mb-1">
                       <Server className="w-3.5 h-3.5 text-text-muted" />
-                      <span>Provider Name</span>
+                      <span>{t('wizard.providerName')}</span>
                     </label>
                     <input
                       type="text"
                       value={manualName}
                       onChange={e => setManualName(e.target.value)}
-                      placeholder="e.g. Token Harbor, Groq, DeepSeek"
+                      placeholder={t('wizard.providerNamePlaceholder')}
                       className="w-full"
                     />
                   </div>
@@ -316,7 +318,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                   <div>
                     <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-secondary mb-1">
                       <Globe className="w-3.5 h-3.5 text-text-muted" />
-                      <span>Base URL</span>
+                      <span>{t('wizard.baseUrl')}</span>
                     </label>
                     <input
                       type="text"
@@ -331,8 +333,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                   <div>
                     <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-secondary mb-1">
                       <Key className="w-3.5 h-3.5 text-text-muted" />
-                      <span>API Key</span>
-                      <span className="text-text-muted text-[10px] font-normal">(Encrypted with AES-256-GCM)</span>
+                      <span>{t('wizard.apiKey')}</span>
+                      <span className="text-text-muted text-[10px] font-normal">{t('wizard.encryptedNote')}</span>
                     </label>
                     <div className="relative">
                       <input
@@ -346,7 +348,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                         type="button"
                         onClick={() => setShowKey(!showKey)}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-1"
-                        title={showKey ? 'Hide key' : 'Show key'}
+                        title={showKey ? t('wizard.hideKey') : t('wizard.showKey')}
                       >
                         {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
@@ -363,7 +365,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                 onClick={handleDismiss}
                 className="text-xs text-text-muted hover:text-text-primary transition-colors underline-offset-4 hover:underline"
               >
-                Skip for now & explore dashboard
+                {t('wizard.skipExplore')}
               </button>
 
               <button
@@ -372,7 +374,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                 disabled={isSubmitting || (providerType === 'manual' && !manualUrl.trim())}
                 className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
               >
-                <span>{isSubmitting ? 'Connecting...' : 'Connect & Fetch Models'}</span>
+                <span>{isSubmitting ? t('wizard.connecting') : t('wizard.connectFetch')}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -384,7 +386,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
           <div className="space-y-4">
             <div className="flex items-center justify-between text-xs text-text-secondary">
               <span>
-                Step 2: Discovered <strong className="text-text-primary">{discoveredModels.length} models</strong>. Choose targets for your default <code className="font-mono text-text-primary">auto</code> chain:
+                {t('wizard.step2Title', { count: discoveredModels.length })}
               </span>
               <button
                 type="button"
@@ -395,7 +397,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                 className="flex items-center gap-1 text-[11px] text-status-healthy hover:underline"
               >
                 <Sparkles className="w-3 h-3" />
-                <span>Select Free Only</span>
+                <span>{t('wizard.selectFreeOnly')}</span>
               </button>
             </div>
 
@@ -424,7 +426,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                       <span className="font-mono text-xs">{m.modelId}</span>
                       {isFree && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-status-healthy/15 text-status-healthy border border-status-healthy/30 uppercase tracking-wider">
-                          FREE
+                          {t('common.free')}
                         </span>
                       )}
                     </div>
@@ -445,18 +447,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                 onClick={handleDismiss}
                 className="text-xs text-text-muted hover:text-text-primary transition-colors underline-offset-4 hover:underline"
               >
-                Skip for now
+                {t('wizard.skip')}
               </button>
 
               <div className="flex items-center gap-3">
-                <span className="text-xs text-text-muted">{selectedModels.length} targets selected</span>
+                <span className="text-xs text-text-muted">{t('wizard.targetsSelected', { count: selectedModels.length })}</span>
                 <button
                   type="button"
                   onClick={handleStep2Submit}
                   disabled={isSubmitting || selectedModels.length === 0}
                   className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
                 >
-                  <span>Save Chain & Continue</span>
+                  <span>{t('wizard.saveChainContinue')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -468,7 +470,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
         {step === 3 && (
           <div className="space-y-4">
             <div className="text-xs text-text-secondary">
-              Step 3: Setup complete! Copy your tool configuration snippet or start routing now.
+              {t('wizard.step3Title')}
             </div>
 
             <div className="relative rounded-lg bg-bg-base border border-border-default p-3.5">
@@ -482,7 +484,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
                   setTimeout(() => setCopiedSnippet(false), 2000);
                 }}
                 className="absolute right-2.5 top-2.5 p-1.5 rounded bg-bg-raised text-text-muted hover:text-text-primary border border-border-default transition-colors"
-                title="Copy snippet"
+                title={t('wizard.copySnippet')}
               >
                 {copiedSnippet ? <Check className="w-3.5 h-3.5 text-status-healthy" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
@@ -491,14 +493,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
             <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
               <div className="text-xs text-status-healthy flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Router is fully operational</span>
+                <span>{t('wizard.routerOperational')}</span>
               </div>
               <button
                 type="button"
                 onClick={handleFinish}
                 className="px-5 py-2 text-xs font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle"
               >
-                Open Dashboard
+                {t('wizard.openDashboard')}
               </button>
             </div>
           </div>

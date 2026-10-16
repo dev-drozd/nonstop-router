@@ -6,8 +6,10 @@ import { StatusBadge } from '../components/StatusBadge.js';
 import { GitFork, Plus, Trash2, ArrowUp, ArrowDown, Sparkles, Shield, Wrench } from 'lucide-react';
 import type { Chain, ChainMode } from '../../shared/types.js';
 import { isFreeModelId } from '../../shared/types.js';
+import { useI18n } from '../i18n/index.js';
 
 export const ChainsPage: React.FC = () => {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: chains = [] } = useChains();
   const { data: models = [] } = useModels();
@@ -167,24 +169,24 @@ export const ChainsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary tracking-tight">Routing Chains</h1>
+          <h1 className="text-xl font-semibold text-text-primary tracking-tight">{t('chains.title')}</h1>
           <p className="text-xs text-text-secondary mt-1">
-            Define ordered failover targets, routing priority, and capability requirements.
+            {t('chains.subtitle')}
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 bg-bg-surface p-1 rounded-md border border-border-default shadow-subtle">
-            <span className="text-[11px] text-text-muted pl-1.5 font-medium">Policy:</span>
+            <span className="text-[11px] text-text-muted pl-1.5 font-medium">{t('chains.policy')}</span>
             <select
               value={autoPolicy}
               onChange={(e) => setAutoPolicy(e.target.value as any)}
               className="bg-bg-raised border border-border-subtle rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent font-medium cursor-pointer"
-              title="Choose failover chain generation policy"
+              title={t('chains.policyTooltip')}
             >
-              <option value="free_only">100% Free Tier ($0 - Default)</option>
-              <option value="free_first">Free First + Paid Fallback</option>
-              <option value="all">All Models (Include Paid)</option>
+              <option value="free_only">{t('chains.policyFreeOnly')}</option>
+              <option value="free_first">{t('chains.policyFreeFirst')}</option>
+              <option value="all">{t('chains.policyAll')}</option>
             </select>
 
             <button
@@ -193,7 +195,7 @@ export const ChainsPage: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-1 rounded bg-status-healthy text-white hover:opacity-90 text-xs font-medium transition-opacity shadow-subtle disabled:opacity-50"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{buildingFreeChain ? 'Building...' : 'Auto-Build Chain'}</span>
+              <span>{buildingFreeChain ? t('chains.building') : t('chains.autoBuildChain')}</span>
             </button>
           </div>
 
@@ -202,7 +204,7 @@ export const ChainsPage: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white hover:bg-accent-hover text-xs font-medium transition-colors shadow-subtle"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>New Chain</span>
+            <span>{t('chains.newChain')}</span>
           </button>
         </div>
       </div>
@@ -239,20 +241,20 @@ export const ChainsPage: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-base font-semibold text-text-primary">{activeChain.name}</span>
-                <span className="text-xs text-text-muted">({totalCount} targets)</span>
+                <span className="text-xs text-text-muted">{t('chains.targetsCount', { count: totalCount })}</span>
                 {totalCount > 0 && paidCount === 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-status-healthy-bg text-status-healthy border border-[rgba(47,158,68,0.3)]">
-                    100% Free Tier ($0 Guaranteed)
+                    {t('chains.freeGuaranteedBadge')}
                   </span>
                 )}
                 {totalCount > 0 && paidCount > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-[rgba(245,159,0,0.15)] text-[#f59f00] border border-[rgba(245,159,0,0.3)]">
-                    {freeCount} Free + {paidCount} Paid Fallbacks
+                    {t('chains.freePlusPaidBadge', { free: freeCount, paid: paidCount })}
                   </span>
                 )}
               </div>
               <p className="text-xs text-text-secondary mt-1">
-                {activeChain.description || `Incoming requests with model '${activeChain.name}' will route through these targets in order.`}
+                {activeChain.description || t('chains.defaultTargetDesc', { name: activeChain.name })}
               </p>
             </div>
 
@@ -266,7 +268,7 @@ export const ChainsPage: React.FC = () => {
                     : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
-                Priority Mode
+                {t('chains.priorityMode')}
               </button>
               <button
                 onClick={() => handleUpdateMode('sticky')}
@@ -276,7 +278,7 @@ export const ChainsPage: React.FC = () => {
                     : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
-                Sticky Mode
+                {t('chains.stickyMode')}
               </button>
             </div>
           </div>
@@ -285,30 +287,30 @@ export const ChainsPage: React.FC = () => {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-medium text-text-muted uppercase tracking-wider">
-                Failover Order (Top to Bottom)
+                {t('chains.failoverOrder')}
               </h2>
               <button
                 onClick={() => setShowAddTargetModal(true)}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-bg-surface border border-border-default hover:bg-bg-raised text-text-primary text-xs font-medium transition-colors"
               >
                 <Plus className="w-3 h-3" />
-                <span>Add Target</span>
+                <span>{t('chains.addTarget')}</span>
               </button>
             </div>
 
             {!activeChain.targets || activeChain.targets.length === 0 ? (
               <div className="p-8 text-center rounded-md bg-bg-surface border border-border-default text-xs text-text-muted space-y-2">
                 <img src="/assets/icon.svg" alt="NonStop Router" className="w-8 h-8 mx-auto opacity-50" width={32} height={32} />
-                <div>No targets in this chain. Select a policy above and click "Auto-Build Chain".</div>
+                <div>{t('chains.noTargets')}</div>
               </div>
             ) : (
               <div className="space-y-2">
-                {activeChain.targets.map((t, idx) => {
-                  const isFree = t.isFree ?? isFreeModelId(t.modelId);
+                {activeChain.targets.map((tTarget, idx) => {
+                  const isFree = tTarget.isFree ?? isFreeModelId(tTarget.modelId);
 
                   return (
                     <div
-                      key={t.id}
+                      key={tTarget.id}
                       className="p-3.5 rounded-md bg-bg-surface border border-border-default flex items-center justify-between gap-3 hover:border-border-strong transition-colors"
                     >
                       <div className="flex items-center gap-3">
@@ -316,25 +318,25 @@ export const ChainsPage: React.FC = () => {
                           {idx + 1}
                         </div>
 
-                        <ModelLogo modelId={t.modelId} providerName={t.providerName} size={26} />
+                        <ModelLogo modelId={tTarget.modelId} providerName={tTarget.providerName} size={26} />
 
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-semibold text-text-primary">{t.modelId}</span>
+                            <span className="font-mono text-xs font-semibold text-text-primary">{tTarget.modelId}</span>
                             {isFree ? (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-status-healthy-bg text-status-healthy border border-[rgba(47,158,68,0.3)]">
-                                FREE
+                                {t('common.free')}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-[rgba(245,159,0,0.15)] text-[#f59f00] border border-[rgba(245,159,0,0.3)]">
-                                PAID
+                                {t('common.paid')}
                               </span>
                             )}
-                            <span className="text-[11px] text-text-muted">({t.providerName})</span>
-                            <StatusBadge status={t.status || 'healthy'} />
+                            <span className="text-[11px] text-text-muted">({tTarget.providerName})</span>
+                            <StatusBadge status={tTarget.status || 'healthy'} />
                           </div>
                           <div className="text-[10px] text-text-muted mt-0.5">
-                            {idx === 0 ? 'Primary Active Route' : `Fallback #${idx}`}
+                            {idx === 0 ? t('chains.primaryActiveRoute') : t('chains.fallbackRoute', { idx })}
                           </div>
                         </div>
                       </div>
@@ -344,7 +346,7 @@ export const ChainsPage: React.FC = () => {
                           onClick={() => handleMoveTarget(idx, 'up')}
                           disabled={idx === 0}
                           className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
-                          title="Move Up"
+                          title={t('chains.moveUp')}
                         >
                           <ArrowUp className="w-3.5 h-3.5" />
                         </button>
@@ -352,14 +354,14 @@ export const ChainsPage: React.FC = () => {
                           onClick={() => handleMoveTarget(idx, 'down')}
                           disabled={idx === activeChain.targets!.length - 1}
                           className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
-                          title="Move Down"
+                          title={t('chains.moveDown')}
                         >
                           <ArrowDown className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleRemoveTarget(idx)}
                           className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-status-error transition-colors ml-2"
-                          title="Remove Target"
+                          title={t('chains.removeTarget')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -379,7 +381,7 @@ export const ChainsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddTargetModal(false)} />
           <div className="relative z-10 w-full max-w-lg rounded-md bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
-            <h2 className="text-base font-semibold text-text-primary">Add Target to Chain</h2>
+            <h2 className="text-base font-semibold text-text-primary">{t('chains.addTargetModalTitle')}</h2>
             <div className="max-h-80 overflow-y-auto space-y-2">
               {models.filter(m => m.enabled).map((m: any) => {
                 const isFree = isFreeModelId(m.modelId);
@@ -395,7 +397,7 @@ export const ChainsPage: React.FC = () => {
                           <span className="font-mono text-xs font-medium text-text-primary">{m.modelId}</span>
                           {isFree && (
                             <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-status-healthy-bg text-status-healthy">
-                              FREE
+                              {t('common.free')}
                             </span>
                           )}
                         </div>
@@ -406,7 +408,7 @@ export const ChainsPage: React.FC = () => {
                       onClick={() => handleAddTarget(m.providerId, m.modelId)}
                       className="px-2.5 py-1 rounded bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors"
                     >
-                      Select
+                      {t('chains.select')}
                     </button>
                   </div>
                 );
@@ -417,7 +419,7 @@ export const ChainsPage: React.FC = () => {
                 onClick={() => setShowAddTargetModal(false)}
                 className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
               >
-                Close
+                {t('common.close')}
               </button>
             </div>
           </div>
@@ -429,39 +431,39 @@ export const ChainsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddChainModal(false)} />
           <div className="relative z-10 w-full max-w-md rounded-md bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
-            <h2 className="text-base font-semibold text-text-primary">Create New Chain</h2>
+            <h2 className="text-base font-semibold text-text-primary">{t('chains.createNewChainModalTitle')}</h2>
             <form onSubmit={handleCreateChain} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Chain Name</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('chains.chainName')}</label>
                 <input
                   type="text"
                   required
                   value={newChainName}
                   onChange={e => setNewChainName(e.target.value)}
-                  placeholder="e.g. nonstop-free, coding, fast"
+                  placeholder={t('chains.chainNamePlaceholder')}
                   className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Failover Mode</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('chains.failoverMode')}</label>
                 <select
                   value={newChainMode}
                   onChange={e => setNewChainMode(e.target.value as any)}
                   className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 >
-                  <option value="priority">Priority Mode (Always return to Target #1)</option>
-                  <option value="sticky">Sticky Mode (Stay on working target)</option>
+                  <option value="priority">{t('chains.priorityModeOption')}</option>
+                  <option value="sticky">{t('chains.stickyModeOption')}</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Description (Optional)</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('chains.descriptionOptional')}</label>
                 <input
                   type="text"
                   value={newChainDesc}
                   onChange={e => setNewChainDesc(e.target.value)}
-                  placeholder="e.g. Auto free routing chain"
+                  placeholder={t('chains.descriptionPlaceholder')}
                   className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
@@ -472,13 +474,13 @@ export const ChainsPage: React.FC = () => {
                   onClick={() => setShowAddChainModal(false)}
                   className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle"
                 >
-                  Create Chain
+                  {t('chains.createChainBtn')}
                 </button>
               </div>
             </form>

@@ -23,6 +23,8 @@ yarn-error.log*
 # OS / Editor files
 .DS_Store
 Thumbs.db
+desktop.ini
+.directory
 .idea/
 .vscode/
 *.suo
@@ -39,3 +41,8 @@ update-opencode.ts
 # npm pack output
 *.tgz
 *.tsbuildinfo
+
+# OSPanel & local files
+.osp/
+*.local
+

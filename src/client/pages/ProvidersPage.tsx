@@ -5,8 +5,10 @@ import { ProviderLogo } from '../components/ProviderLogo.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Server, Plus, Download, Key, Trash2, CheckCircle2, AlertCircle, RefreshCw, Eye, EyeOff, Copy, ShieldAlert, X, Pencil, Sparkles, Zap, Power } from 'lucide-react';
 import type { Provider, ProviderProtocol, KeySelectionStrategy } from '../../shared/types.js';
+import { useI18n } from '../i18n/index.js';
 
 export const ProvidersPage: React.FC = () => {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: providers = [], isLoading } = useProviders();
 
@@ -372,9 +374,9 @@ export const ProvidersPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary tracking-tight">Providers &amp; Key Pools</h1>
+          <h1 className="text-xl font-semibold text-text-primary tracking-tight">{t('providers.title')}</h1>
           <p className="text-xs text-text-secondary mt-1">
-            Configure upstream LLMs, manage encrypted key pools, and failover behavior.
+            {t('providers.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -383,7 +385,7 @@ export const ProvidersPage: React.FC = () => {
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-accent text-white hover:bg-accent-hover text-xs font-medium transition-colors shadow-subtle"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Provider</span>
+            <span>{t('providers.addProvider')}</span>
           </button>
         </div>
       </div>
@@ -392,7 +394,7 @@ export const ProvidersPage: React.FC = () => {
       <div className="p-3 rounded-md bg-bg-surface border border-border-subtle flex items-start gap-2.5 text-xs text-text-muted">
         <ShieldAlert className="w-4 h-4 text-text-muted shrink-0 mt-0.5" />
         <span>
-          Note: You are responsible for ensuring that multi-key pooling and request routing adhere to each provider's terms of service and acceptable use policies.
+          {t('providers.tosNotice')}
         </span>
       </div>
 
@@ -401,16 +403,16 @@ export const ProvidersPage: React.FC = () => {
         {providers.length === 0 ? (
           <div className="p-12 text-center rounded-md bg-bg-surface border border-border-default space-y-3">
             <img src="/assets/icon.svg" alt="NonStop Router" className="w-8 h-8 mx-auto opacity-70" width={32} height={32} />
-            <div className="text-sm font-medium text-text-primary">No Providers Configured</div>
+            <div className="text-sm font-medium text-text-primary">{t('providers.noProvidersTitle')}</div>
             <p className="text-xs text-text-secondary max-w-md mx-auto">
-              Add your first AI provider or import existing configurations from your OpenCode setup.
+              {t('providers.noProvidersDesc')}
             </p>
             <div className="flex items-center justify-center gap-3 pt-2">
               <button
                 onClick={() => setShowAddModal(true)}
                 className="px-3.5 py-1.5 rounded-md bg-accent text-white text-xs font-medium hover:bg-accent-hover"
               >
-                Add Provider
+                {t('providers.addProvider')}
               </button>
             </div>
           </div>
@@ -428,7 +430,7 @@ export const ProvidersPage: React.FC = () => {
                         {p.protocol}
                       </span>
                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-bg-raised text-text-muted border border-border-subtle">
-                        Strategy: {p.selectionStrategy}
+                        {t('providers.strategy', { strategy: p.selectionStrategy })}
                       </span>
                     </div>
                     <div className="text-xs font-mono text-text-muted mt-0.5 truncate max-w-md">{p.baseUrl}</div>
@@ -441,19 +443,19 @@ export const ProvidersPage: React.FC = () => {
                     className="flex items-center gap-1 px-2.5 py-1 rounded bg-bg-raised hover:bg-bg-overlay text-text-primary text-xs font-medium transition-colors border border-border-subtle"
                   >
                     <Plus className="w-3 h-3" />
-                    <span>Add Key</span>
+                    <span>{t('providers.addKey')}</span>
                   </button>
                   <button
                     onClick={() => handleOpenEditProvider(p)}
                     className="p-1.5 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary transition-colors border border-transparent hover:border-border-subtle"
-                    title="Edit provider details"
+                    title={t('providers.editProviderTooltip')}
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => handleDeleteProvider(p.id, p.name)}
                     className="p-1.5 rounded hover:bg-bg-raised text-text-muted hover:text-status-error transition-colors"
-                    title="Delete provider"
+                    title={t('providers.deleteProviderTooltip')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -463,12 +465,12 @@ export const ProvidersPage: React.FC = () => {
               {/* Keys Pool List */}
               <div className="p-4 bg-bg-base/40 space-y-2">
                 <div className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
-                  Key Pool ({p.keys?.length || 0})
+                  {t('providers.keyPoolTitle', { count: p.keys?.length || 0 })}
                 </div>
 
                 {p.keys?.length === 0 ? (
                   <div className="text-xs text-text-muted italic py-2">
-                    No keys added yet. Add a key to start routing requests.
+                    {t('providers.noKeysAdded')}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -496,7 +498,7 @@ export const ProvidersPage: React.FC = () => {
                               <button
                                 onClick={() => handleToggleRevealKey(k.id)}
                                 className="p-0.5 rounded text-text-muted hover:text-text-primary transition-colors"
-                                title={isRevealed ? 'Hide secret key' : 'Show full secret key'}
+                                title={isRevealed ? t('providers.hideSecretKey') : t('providers.showSecretKey')}
                               >
                                 {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                               </button>
@@ -511,27 +513,27 @@ export const ProvidersPage: React.FC = () => {
                                   }
                                   if (textToCopy) {
                                     navigator.clipboard.writeText(textToCopy);
-                                    alert(`Copied API key for ${k.label}`);
+                                    alert(t('providers.copiedKeyAlert', { label: k.label }));
                                   }
                                 }}
                                 className="p-0.5 rounded text-text-muted hover:text-text-primary transition-colors"
-                                title="Copy raw API key"
+                                title={t('providers.copyRawApiKey')}
                               >
                                 <Copy className="w-3.5 h-3.5" />
                               </button>
                             </div>
 
                             <div className="text-[11px] font-mono text-text-muted flex items-center gap-1.5 flex-wrap">
-                              <span className="text-text-primary font-medium">{formatTokens(k.tokensUsed || 0)} tokens</span>
+                              <span className="text-text-primary font-medium">{formatTokens(k.tokensUsed || 0)} {t('common.tokens')}</span>
                               <span>&bull;</span>
-                              <span>{k.usageCount} requests</span>
+                              <span>{k.usageCount} {t('common.requests')}</span>
                             </div>
 
                             {/* Live Test Feedback if tested */}
                             {testState && (
                               <div className="text-[10px] font-mono p-1.5 rounded bg-bg-raised border border-border-subtle flex items-center justify-between">
                                 <span className={testState.error ? 'text-status-error' : 'text-status-healthy'}>
-                                  {testState.loading ? 'Testing Key...' : (testState.error || testState.statusLabel || 'ACTIVE')}
+                                  {testState.loading ? t('providers.testingKey') : (testState.error || testState.statusLabel || t('providers.keyActiveState'))}
                                 </span>
                                 {testState.latencyMs !== undefined && (
                                   <span className="text-text-muted">{testState.latencyMs}ms</span>
@@ -551,24 +553,24 @@ export const ProvidersPage: React.FC = () => {
                               onClick={() => handleTestKey(k.id)}
                               disabled={testState?.loading}
                               className="px-2 py-1 rounded bg-bg-raised hover:bg-bg-overlay text-text-primary text-[10px] font-medium transition-colors border border-border-subtle flex items-center gap-1"
-                              title="Test API key ping & quota responsiveness"
+                              title={t('providers.testKeyTooltip')}
                             >
                               <Zap className="w-3 h-3 text-accent" />
-                              <span>{testState?.loading ? 'Testing...' : 'Test Key'}</span>
+                              <span>{testState?.loading ? t('common.testing') : t('providers.testKey')}</span>
                             </button>
 
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleToggleKeyDisabled(k.id, isDisabled)}
                                 className={`p-1 rounded hover:bg-bg-raised transition-colors ${isDisabled ? 'text-status-healthy hover:text-status-healthy' : 'text-text-muted hover:text-status-warning'}`}
-                                title={isDisabled ? 'Enable key (return to rotation)' : 'Disable key (exclude from rotation)'}
+                                title={isDisabled ? t('providers.enableKeyTooltip') : t('providers.disableKeyTooltip')}
                               >
                                 <Power className="w-3 h-3" />
                               </button>
                               <button
                                 onClick={() => handleOpenEditKey(k)}
                                 className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary transition-colors"
-                                title="Edit key label or token"
+                                title={t('providers.editKeyTooltip')}
                               >
                                 <Pencil className="w-3 h-3" />
                               </button>
@@ -576,7 +578,7 @@ export const ProvidersPage: React.FC = () => {
                                 <button
                                   onClick={() => handleResetKey(k.id)}
                                   className="p-1 rounded hover:bg-bg-raised text-accent hover:text-accent-hover transition-colors"
-                                  title="Reset key to healthy"
+                                  title={t('providers.resetKeyTooltip')}
                                 >
                                   <RefreshCw className="w-3 h-3" />
                                 </button>
@@ -584,7 +586,7 @@ export const ProvidersPage: React.FC = () => {
                               <button
                                 onClick={() => handleDeleteKey(k.id, k.label)}
                                 className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-status-error transition-colors"
-                                title="Delete key"
+                                title={t('providers.deleteKeyTooltip')}
                               >
                                 <Trash2 className="w-3 h-3" />
                               </button>
@@ -606,12 +608,12 @@ export const ProvidersPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="relative z-10 w-full max-w-lg rounded-xl bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4 animate-modal">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-text-primary">Add Upstream Provider</h2>
+              <h2 className="text-base font-semibold text-text-primary">{t('providers.addUpstreamModalTitle')}</h2>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-raised transition-colors"
-                title="Close"
+                title={t('common.close')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -620,7 +622,7 @@ export const ProvidersPage: React.FC = () => {
 
             {/* Presets Bar */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-text-secondary">Quick Presets</label>
+              <label className="text-xs font-medium text-text-secondary">{t('providers.quickPresets')}</label>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   { name: 'Token Harbor', protocol: 'openai', defaultBaseUrl: 'https://tokenharbor.ai/v1' },
@@ -645,60 +647,60 @@ export const ProvidersPage: React.FC = () => {
 
             <form onSubmit={handleCreateProvider} className="space-y-3 pt-2">
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Provider Name</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.providerName')}</label>
                 <input
                   type="text"
                   required
                   value={providerName}
                   onChange={e => setProviderName(e.target.value)}
-                  placeholder="e.g. Token Harbor, Groq, Ollama"
+                  placeholder={t('providers.providerNamePlaceholder')}
                   className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Protocol Type</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.protocolType')}</label>
                   <select
                     value={protocol}
                     onChange={e => setProtocol(e.target.value as any)}
                     className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                   >
-                    <option value="openai">OpenAI Compatible</option>
-                    <option value="anthropic">Anthropic Messages</option>
-                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">{t('providers.protocolOpenAI')}</option>
+                    <option value="anthropic">{t('providers.protocolAnthropic')}</option>
+                    <option value="gemini">{t('providers.protocolGemini')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Key Strategy</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.keyStrategy')}</label>
                   <select
                     value={selectionStrategy}
                     onChange={e => setSelectionStrategy(e.target.value as any)}
                     className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                   >
-                    <option value="round-robin">Round Robin</option>
-                    <option value="fill-first">Fill First</option>
-                    <option value="least-used">Least Used</option>
+                    <option value="round-robin">{t('providers.strategyRoundRobin')}</option>
+                    <option value="fill-first">{t('providers.strategyFillFirst')}</option>
+                    <option value="least-used">{t('providers.strategyLeastUsed')}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Base URL</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.baseUrl')}</label>
                 <input
                   type="text"
                   required
                   value={baseUrl}
                   onChange={e => setBaseUrl(e.target.value)}
-                  placeholder="https://api.example.com/v1"
+                  placeholder={t('providers.baseUrlPlaceholder')}
                   className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Initial API Key (Encrypted at Rest)</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.initialKeyLabel')}</label>
                   <input
                     type="password"
                     value={initialKey}
@@ -708,7 +710,7 @@ export const ProvidersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Key Label</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.keyLabel')}</label>
                   <input
                     type="text"
                     value={keyLabel}
@@ -727,7 +729,7 @@ export const ProvidersPage: React.FC = () => {
                   disabled={testingConnection || !baseUrl}
                   className="px-2.5 py-1 rounded bg-bg-raised border border-border-default text-xs font-medium hover:bg-bg-overlay text-text-primary disabled:opacity-50"
                 >
-                  {testingConnection ? 'Testing...' : 'Test Connection'}
+                  {testingConnection ? t('common.testing') : t('providers.testConnection')}
                 </button>
 
                 {testResult && (
@@ -735,8 +737,8 @@ export const ProvidersPage: React.FC = () => {
                     {testResult.success ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
                     <span>
                       {testResult.success
-                        ? `Connected (${testResult.latencyMs}ms, ${testResult.modelCount} models)`
-                        : (testResult.error || 'Connection failed')}
+                        ? t('providers.connectedFeedback', { latency: testResult.latencyMs, models: testResult.modelCount })
+                        : (testResult.error || t('providers.connectionFailedFeedback'))}
                     </span>
                   </div>
                 )}
@@ -752,13 +754,13 @@ export const ProvidersPage: React.FC = () => {
                   onClick={() => setShowAddModal(false)}
                   className="px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle"
                 >
-                  Save Provider
+                  {t('providers.saveProvider')}
                 </button>
               </div>
             </form>
@@ -771,12 +773,12 @@ export const ProvidersPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-modal">
           <div className="relative z-10 w-full max-w-xl rounded-xl bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-text-primary">Import from OpenCode Configuration</h2>
+              <h2 className="text-base font-semibold text-text-primary">{t('providers.importModalTitle')}</h2>
               <button
                 type="button"
                 onClick={() => setShowImportModal(false)}
                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-raised transition-colors"
-                title="Close"
+                title={t('common.close')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -784,11 +786,11 @@ export const ProvidersPage: React.FC = () => {
 
 
             {loadingImport ? (
-              <div className="py-8 text-center text-xs text-text-muted">Scanning ~/.config/opencode...</div>
+              <div className="py-8 text-center text-xs text-text-muted">{t('providers.scanningConfig')}</div>
             ) : importPreview?.found ? (
               <div className="space-y-3">
                 <div className="text-xs text-text-secondary">
-                  Detected config at: <code className="font-mono text-text-primary">{importPreview.filePath}</code>
+                  {t('providers.detectedConfigAt', { path: importPreview.filePath })}
                 </div>
 
                 <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -801,12 +803,12 @@ export const ProvidersPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-xs text-text-primary">{cand.name}</span>
                           <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-bg-surface text-text-muted">
-                            {cand.modelCount} models
+                            {t('providers.modelsCount', { count: cand.modelCount })}
                           </span>
                         </div>
                         <div className="text-[11px] font-mono text-text-muted">{cand.baseUrl}</div>
                         <div className="text-[11px] text-text-secondary">
-                          Key: {cand.resolvedKeyMasked ? <span className="font-mono text-text-primary">{cand.resolvedKeyMasked}</span> : <span className="text-status-warning">Missing key</span>}
+                          Key: {cand.resolvedKeyMasked ? <span className="font-mono text-text-primary">{cand.resolvedKeyMasked}</span> : <span className="text-status-warning">{t('providers.missingKey')}</span>}
                         </div>
                       </div>
 
@@ -815,7 +817,7 @@ export const ProvidersPage: React.FC = () => {
                         disabled={importingKey === cand.providerKey}
                         className="px-3 py-1.5 rounded bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors shrink-0 disabled:opacity-50"
                       >
-                        {importingKey === cand.providerKey ? 'Importing...' : 'Import'}
+                        {importingKey === cand.providerKey ? t('common.loading') : t('common.import')}
                       </button>
                     </div>
                   ))}
@@ -823,7 +825,7 @@ export const ProvidersPage: React.FC = () => {
               </div>
             ) : (
               <div className="p-4 text-center text-xs text-text-muted">
-                No custom providers found in OpenCode config file.
+                {t('providers.noCustomProvidersFound')}
               </div>
             )}
 
@@ -833,7 +835,7 @@ export const ProvidersPage: React.FC = () => {
                 onClick={() => setShowImportModal(false)}
                 className="px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
               >
-                Close
+                {t('common.close')}
               </button>
             </div>
           </div>
@@ -845,12 +847,12 @@ export const ProvidersPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-modal">
           <div className="relative z-10 w-full max-w-md rounded-xl bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-text-primary">Add Key to Provider Pool</h2>
+              <h2 className="text-base font-semibold text-text-primary">{t('providers.addKeyModalTitle')}</h2>
               <button
                 type="button"
                 onClick={() => setShowAddKeyModal(null)}
                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-raised transition-colors"
-                title="Close"
+                title={t('common.close')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -858,17 +860,17 @@ export const ProvidersPage: React.FC = () => {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Key Label</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.keyLabel')}</label>
                 <input
                   type="text"
                   value={newKeyLabel}
                   onChange={e => setNewKeyLabel(e.target.value)}
-                  placeholder="e.g. Account 2, Team Key"
+                  placeholder={t('providers.keyLabelPlaceholder')}
                   className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">API Key</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.apiKeyInput')}</label>
                 <input
                   type="password"
                   value={newKeyRaw}
@@ -883,13 +885,13 @@ export const ProvidersPage: React.FC = () => {
                 onClick={() => setShowAddKeyModal(null)}
                 className="px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={() => handleAddKey(showAddKeyModal)}
                 className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle"
               >
-                Save Key
+                {t('providers.saveKey')}
               </button>
             </div>
           </div>
@@ -901,12 +903,12 @@ export const ProvidersPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-modal">
           <div className="relative z-10 w-full max-w-lg rounded-xl bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-text-primary">Edit Provider Details</h2>
+              <h2 className="text-base font-semibold text-text-primary">{t('providers.editProviderModalTitle')}</h2>
               <button
                 type="button"
                 onClick={() => setEditingProvider(null)}
                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-raised transition-colors"
-                title="Close"
+                title={t('common.close')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -914,53 +916,53 @@ export const ProvidersPage: React.FC = () => {
 
             <form onSubmit={handleSaveEditProvider} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Provider Name</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.providerName')}</label>
                 <input
                   type="text"
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
                   required
-                  placeholder="e.g. Custom Provider"
+                  placeholder={t('providers.editProviderPlaceholder')}
                   className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Protocol</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.protocol')}</label>
                   <select
                     value={editProtocol}
                     onChange={e => setEditProtocol(e.target.value as any)}
                     className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                   >
-                    <option value="openai">OpenAI Compatible</option>
-                    <option value="anthropic">Anthropic Messages</option>
-                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">{t('providers.protocolOpenAI')}</option>
+                    <option value="anthropic">{t('providers.protocolAnthropic')}</option>
+                    <option value="gemini">{t('providers.protocolGemini')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Key Strategy</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.keyStrategy')}</label>
                   <select
                     value={editStrategy}
                     onChange={e => setEditStrategy(e.target.value as any)}
                     className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                   >
-                    <option value="round-robin">Round Robin</option>
-                    <option value="fill-first">Fill First</option>
-                    <option value="least-used">Least Used</option>
+                    <option value="round-robin">{t('providers.strategyRoundRobin')}</option>
+                    <option value="fill-first">{t('providers.strategyFillFirst')}</option>
+                    <option value="least-used">{t('providers.strategyLeastUsed')}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Base URL</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.baseUrl')}</label>
                 <input
                   type="text"
                   value={editBaseUrl}
                   onChange={e => setEditBaseUrl(e.target.value)}
                   required
-                  placeholder="https://api.example.com/v1"
+                  placeholder={t('providers.baseUrlPlaceholder')}
                   className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
@@ -971,13 +973,13 @@ export const ProvidersPage: React.FC = () => {
                   onClick={() => setEditingProvider(null)}
                   className="px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle"
                 >
-                  Save Changes
+                  {t('providers.saveChanges')}
                 </button>
               </div>
             </form>
@@ -990,12 +992,12 @@ export const ProvidersPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-modal">
           <div className="relative z-10 w-full max-w-md rounded-xl bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-text-primary">Edit API Key</h2>
+              <h2 className="text-base font-semibold text-text-primary">{t('providers.editKeyModalTitle')}</h2>
               <button
                 type="button"
                 onClick={() => setEditingKey(null)}
                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-raised transition-colors"
-                title="Close"
+                title={t('common.close')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1003,26 +1005,26 @@ export const ProvidersPage: React.FC = () => {
 
             <form onSubmit={handleSaveEditKey} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Key Label</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.keyLabel')}</label>
                 <input
                   type="text"
                   value={editKeyLabel}
                   onChange={e => setEditKeyLabel(e.target.value)}
                   required
-                  placeholder="e.g. Primary Key, Account 2"
+                  placeholder={t('providers.editKeyLabelPlaceholder')}
                   className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-text-secondary mb-1">
-                  Replace API Key <span className="text-text-muted font-normal">(leave blank to keep current key)</span>
+                  {t('providers.replaceApiKey')} <span className="text-text-muted font-normal">{t('providers.replaceApiKeyHint')}</span>
                 </label>
                 <input
                   type="password"
                   value={editKeyRaw}
                   onChange={e => setEditKeyRaw(e.target.value)}
-                  placeholder="Paste new secret key here..."
+                  placeholder={t('providers.pasteNewKeyPlaceholder')}
                   className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                 />
               </div>
@@ -1033,13 +1035,13 @@ export const ProvidersPage: React.FC = () => {
                   onClick={() => setEditingKey(null)}
                   className="px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle"
                 >
-                  Update Key
+                  {t('providers.updateKey')}
                 </button>
               </div>
             </form>
@@ -1054,43 +1056,43 @@ export const ProvidersPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-accent" />
-                <h2 className="text-base font-semibold text-text-primary">API Key &amp; Limits Inspector Tool</h2>
+                <h2 className="text-base font-semibold text-text-primary">{t('providers.inspectorModalTitle')}</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setShowInspectorModal(false)}
                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-raised transition-colors"
-                title="Close"
+                title={t('common.close')}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <p className="text-xs text-text-secondary">
-              Test any API endpoint and key live to inspect real latency, diagnose quota limits (429/402), and auto-discover models before adding to your pool.
+              {t('providers.inspectorDesc')}
             </p>
 
             <form onSubmit={handleRunInspector} className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">API Base URL</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.apiBaseUrl')}</label>
                   <input
                     type="text"
                     value={inspectBaseUrl}
                     onChange={e => setInspectBaseUrl(e.target.value)}
                     required
-                    placeholder="https://api.example.com/v1"
+                    placeholder={t('providers.baseUrlPlaceholder')}
                     className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">API Key</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">{t('providers.apiKeyInput')}</label>
                   <input
                     type="password"
                     value={inspectApiKey}
                     onChange={e => setInspectApiKey(e.target.value)}
                     required
-                    placeholder="Paste secret API key..."
+                    placeholder={t('providers.pasteSecretKeyPlaceholder')}
                     className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                   />
                 </div>
@@ -1102,7 +1104,7 @@ export const ProvidersPage: React.FC = () => {
                   disabled={inspecting}
                   className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
                 >
-                  {inspecting ? 'Probing Upstream Limits...' : 'Inspect Key & Check Limits'}
+                  {inspecting ? t('providers.probingLimits') : t('providers.inspectKeyBtn')}
                 </button>
               </div>
             </form>
@@ -1130,22 +1132,22 @@ export const ProvidersPage: React.FC = () => {
                     onClick={handleAddInspectedToProvider}
                     className="px-3 py-1 rounded bg-status-healthy text-white text-xs font-medium hover:opacity-90 transition-opacity shadow-subtle"
                   >
-                    + Add as Provider &amp; Import Key
+                    {t('providers.addAsProviderImport')}
                   </button>
                 </div>
 
                 <div className="p-3 rounded bg-bg-base border border-border-subtle text-xs space-y-1">
-                  <span className="font-semibold text-text-primary block">Quota &amp; Limits Diagnosis:</span>
+                  <span className="font-semibold text-text-primary block">{t('providers.quotaDiagnosis')}</span>
                   <div className="font-mono text-text-secondary text-[11px] break-words">
-                    {inspectResult.quotaDetails || 'No diagnosis message returned.'}
+                    {inspectResult.quotaDetails || t('providers.noDiagnosisReturned')}
                   </div>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between text-xs font-medium text-text-primary mb-1.5">
-                    <span>Discovered Models ({inspectResult.modelsCount || 0} Total &bull; {inspectResult.freeModelsCount || 0} Free)</span>
+                    <span>{t('providers.discoveredModelsCount', { total: inspectResult.modelsCount || 0, free: inspectResult.freeModelsCount || 0 })}</span>
                     {inspectResult.workingBaseUrl && (
-                      <span className="text-[10px] font-mono text-text-muted">Detected URL: {inspectResult.workingBaseUrl}</span>
+                      <span className="text-[10px] font-mono text-text-muted">{t('providers.detectedUrl', { url: inspectResult.workingBaseUrl })}</span>
                     )}
                   </div>
 
@@ -1154,8 +1156,8 @@ export const ProvidersPage: React.FC = () => {
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="border-b border-border-subtle bg-bg-surface text-[10px] text-text-muted font-medium">
-                            <th className="py-1.5 px-3">Model ID</th>
-                            <th className="py-1.5 px-3">Tier</th>
+                            <th className="py-1.5 px-3">{t('providers.modelId')}</th>
+                            <th className="py-1.5 px-3">{t('providers.tier')}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-subtle font-mono text-[11px]">
@@ -1164,9 +1166,9 @@ export const ProvidersPage: React.FC = () => {
                               <td className="py-1 px-3 text-text-primary">{m.id}</td>
                               <td className="py-1 px-3">
                                 {m.isFree ? (
-                                  <span className="text-status-healthy font-semibold">FREE</span>
+                                  <span className="text-status-healthy font-semibold">{t('common.free')}</span>
                                 ) : (
-                                  <span className="text-text-muted">Standard</span>
+                                  <span className="text-text-muted">{t('common.standard')}</span>
                                 )}
                               </td>
                             </tr>
@@ -1174,7 +1176,7 @@ export const ProvidersPage: React.FC = () => {
                         </tbody>
                       </table>
                     ) : (
-                      <div className="p-3 text-center text-text-muted text-[11px]">No models returned from provider</div>
+                      <div className="p-3 text-center text-text-muted text-[11px]">{t('providers.noModelsReturned')}</div>
                     )}
                   </div>
                 </div>
@@ -1187,7 +1189,7 @@ export const ProvidersPage: React.FC = () => {
                 onClick={() => setShowInspectorModal(false)}
                 className="px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
               >
-                Close
+                {t('common.close')}
               </button>
             </div>
           </div>
@@ -1204,11 +1206,11 @@ export const ProvidersPage: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-text-primary">
-                  {deleteTarget.type === 'provider' ? 'Delete Provider' : 'Delete API Key'}
+                  {deleteTarget.type === 'provider' ? t('providers.deleteModalTitleProvider') : t('providers.deleteModalTitleKey')}
                 </h3>
                 <p className="text-xs text-text-secondary mt-1 leading-relaxed">
-                  Are you sure you want to delete <strong className="text-text-primary font-mono">{deleteTarget.name}</strong>?
-                  {deleteTarget.type === 'provider' && ' This will remove all associated API keys and discovered models from routing.'}
+                  {t('providers.deleteConfirmDesc', { name: deleteTarget.name })}
+                  {deleteTarget.type === 'provider' && t('providers.deleteProviderWarning')}
                 </p>
               </div>
             </div>
@@ -1220,7 +1222,7 @@ export const ProvidersPage: React.FC = () => {
                 disabled={isDeleting}
                 className="px-3 py-1.5 rounded-md bg-bg-raised hover:bg-bg-overlay text-text-secondary text-xs font-medium transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -1228,7 +1230,7 @@ export const ProvidersPage: React.FC = () => {
                 disabled={isDeleting}
                 className="px-3.5 py-1.5 rounded-md bg-status-error text-white hover:bg-status-error/90 text-xs font-medium transition-colors disabled:opacity-50"
               >
-                {isDeleting ? 'Deleting...' : 'Delete'}
+                {isDeleting ? t('providers.deleting') : t('common.delete')}
               </button>
             </div>
           </div>

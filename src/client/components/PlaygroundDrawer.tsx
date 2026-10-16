@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useChains, useModels, fetchJson } from '../api.js';
 import { ModelLogo } from './ModelLogo.js';
 import { Play, X, Terminal, Clock, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useI18n } from '../i18n/index.js';
 
 interface PlaygroundDrawerProps {
   isOpen: boolean;
@@ -14,11 +15,12 @@ export const PlaygroundDrawer: React.FC<PlaygroundDrawerProps> = ({
   onClose,
   initialModel = 'auto',
 }) => {
+  const { t } = useI18n();
   const { data: chains = [] } = useChains();
   const { data: models = [] } = useModels();
 
   const [selectedModel, setSelectedModel] = useState(initialModel);
-  const [prompt, setPrompt] = useState('Write a Python function to check if a string is a palindrome.');
+  const [prompt, setPrompt] = useState(() => t('playground.defaultPrompt'));
   const [output, setOutput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [metrics, setMetrics] = useState<{ ttftMs?: number; totalLatencyMs?: number; target?: string } | null>(null);
@@ -117,9 +119,9 @@ export const PlaygroundDrawer: React.FC<PlaygroundDrawerProps> = ({
         <div className="p-4 border-b border-border-default flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Terminal className="w-4 h-4 text-accent" />
-            <span className="font-semibold text-sm text-text-primary">Interactive Model Playground</span>
+            <span className="font-semibold text-sm text-text-primary">{t('playground.title')}</span>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary">
+          <button onClick={onClose} className="p-1 rounded hover:bg-bg-raised text-text-muted hover:text-text-primary" title={t('common.close')}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -133,12 +135,12 @@ export const PlaygroundDrawer: React.FC<PlaygroundDrawerProps> = ({
               onChange={e => setSelectedModel(e.target.value)}
               className="px-2.5 py-1 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent text-text-primary flex-1"
             >
-              <optgroup label="Routing Chains">
+              <optgroup label={t('playground.routingChains')}>
                 {chains.map(c => (
                   <option key={c.id} value={c.name}>{c.name} (Chain)</option>
                 ))}
               </optgroup>
-              <optgroup label="Direct Models">
+              <optgroup label={t('playground.directModels')}>
                 {models.filter(m => m.enabled).map((m: any) => (
                   <option key={m.id} value={m.modelId}>
                     {m.modelId} {m.modelId.includes('free') ? '(FREE)' : ''}
@@ -154,30 +156,30 @@ export const PlaygroundDrawer: React.FC<PlaygroundDrawerProps> = ({
             className="flex items-center gap-1.5 px-3 py-1 rounded bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
           >
             <Play className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>{isLoading ? 'Streaming...' : 'Run Prompt'}</span>
+            <span>{isLoading ? t('playground.streaming') : t('playground.runPrompt')}</span>
           </button>
         </div>
 
         {/* Prompt Input & Output */}
         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
           <div>
-            <label className="block text-xs font-medium text-text-muted mb-1">User Prompt</label>
+            <label className="block text-xs font-medium text-text-muted mb-1">{t('playground.userPrompt')}</label>
             <textarea
               rows={3}
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
-              placeholder="Ask anything or test code generation..."
+              placeholder={t('playground.placeholder')}
               className="w-full p-2.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary resize-none"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium text-text-muted">Streamed Response</label>
+              <label className="text-xs font-medium text-text-muted">{t('playground.streamedResponse')}</label>
               {metrics && (
                 <div className="flex items-center gap-3 text-[11px] font-mono text-text-muted">
-                  {metrics.ttftMs && <span>TTFT: {metrics.ttftMs}ms</span>}
-                  <span>Total: {metrics.totalLatencyMs}ms</span>
+                  {metrics.ttftMs && <span>{t('playground.ttft', { ms: metrics.ttftMs })}</span>}
+                  <span>{t('playground.total', { ms: metrics.totalLatencyMs || 0 })}</span>
                 </div>
               )}
             </div>
@@ -185,7 +187,7 @@ export const PlaygroundDrawer: React.FC<PlaygroundDrawerProps> = ({
             <div className="rounded bg-bg-base border border-border-subtle p-3 min-h-[200px] text-xs font-mono text-text-primary whitespace-pre-wrap leading-relaxed">
               {output || (
                 <span className="text-text-muted italic">
-                  {isLoading ? 'Waiting for first token...' : 'Click "Run Prompt" to stream output from the router.'}
+                  {isLoading ? t('playground.waitingFirstToken') : t('playground.clickRunPrompt')}
                 </span>
               )}
             </div>
@@ -201,7 +203,7 @@ export const PlaygroundDrawer: React.FC<PlaygroundDrawerProps> = ({
 
         {/* Footer */}
         <div className="p-3 border-t border-border-default bg-bg-raised/30 flex items-center justify-between text-[11px] text-text-muted">
-          <span>Routing via live gateway on 127.0.0.1:4000</span>
+          <span>{t('playground.routingVia')}</span>
           <span className="text-status-healthy font-mono">200 OK</span>
         </div>
       </div>

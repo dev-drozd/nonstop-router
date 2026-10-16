@@ -22,6 +22,10 @@
 </p>
 
 <p align="center">
+  <strong>English</strong> &bull; <a href="README_RU.md">Русский</a>
+</p>
+
+<p align="center">
   <a href="#-quickstart">Quickstart</a> &bull;
   <a href="#-how-it-works">How It Works</a> &bull;
   <a href="#-supported-tools">Supported Tools</a> &bull;

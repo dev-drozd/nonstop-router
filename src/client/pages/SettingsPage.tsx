@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useSettings, useGatewayKeys, fetchJson } from '../api.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { Sliders, Key, Plus, Trash2, Copy, Check, ShieldAlert, Download, Upload, CheckCircle2 } from 'lucide-react';
+import { Sliders, Key, Plus, Trash2, Copy, Check, ShieldAlert, Download, Upload, CheckCircle2, Globe } from 'lucide-react';
+import { useI18n } from '../i18n/index.js';
 
 export const SettingsPage: React.FC = () => {
+  const { t, language, setLanguage } = useI18n();
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useSettings();
   const { data: gatewayKeys = [] } = useGatewayKeys();
@@ -59,10 +61,10 @@ export const SettingsPage: React.FC = () => {
     setClearingCache(true);
     try {
       await fetchJson('/api/cache', { method: 'DELETE' });
-      alert('Local response cache cleared successfully.');
+      alert(t('settings.cacheClearedAlert'));
       queryClient.invalidateQueries({ queryKey: ['overview'] });
     } catch (err: any) {
-      alert(`Error clearing cache: ${err.message}`);
+      alert(t('settings.cacheClearErrorAlert', { err: err.message }));
     } finally {
       setClearingCache(false);
     }
@@ -118,7 +120,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleDeleteGatewayKey = async (id: string) => {
-    if (!confirm('Revoke this gateway API key? Tools using this key will immediately receive 401 Unauthorized.')) return;
+    if (!confirm(t('settings.revokeKeyConfirm'))) return;
     try {
       await fetchJson(`/api/gateway-keys/${id}`, { method: 'DELETE' });
       queryClient.invalidateQueries({ queryKey: ['gateway-keys'] });
@@ -138,19 +140,57 @@ export const SettingsPage: React.FC = () => {
     <div className="p-6 md:p-8 space-y-8 max-w-4xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-text-primary tracking-tight">Gateway Settings</h1>
+        <h1 className="text-xl font-semibold text-text-primary tracking-tight">{t('settings.title')}</h1>
         <p className="text-xs text-text-secondary mt-1">
-          Tune routing timeouts, health probe cadences, security settings, and local gateway keys.
+          {t('settings.subtitle')}
         </p>
+      </div>
+
+      {/* Interface Language Card */}
+      <div className="p-5 rounded-md bg-bg-surface border border-border-default space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-semibold text-text-primary">{t('settings.languageSectionTitle')}</h2>
+          </div>
+          <p className="text-xs text-text-muted mt-1">
+            {t('settings.languageSectionDesc')}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setLanguage('en')}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-colors border ${
+              language === 'en'
+                ? 'bg-accent text-white border-accent shadow-subtle'
+                : 'bg-bg-raised text-text-secondary border-border-subtle hover:text-text-primary'
+            }`}
+          >
+            {t('settings.languageOptionEn')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLanguage('ru')}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-colors border ${
+              language === 'ru'
+                ? 'bg-accent text-white border-accent shadow-subtle'
+                : 'bg-bg-raised text-text-secondary border-border-subtle hover:text-text-primary'
+            }`}
+          >
+            {t('settings.languageOptionRu')}
+          </button>
+        </div>
       </div>
 
       {/* Gateway Keys Card */}
       <div className="p-5 rounded-md bg-bg-surface border border-border-default space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-text-primary">Local Gateway API Keys</h2>
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-text-primary">{t('settings.gatewayKeysTitle')}</h2>
             <p className="text-xs text-text-muted mt-0.5">
-              Client tools (Claude Code, OpenCode, Codex) must provide one of these keys to access the gateway.
+              {t('settings.gatewayKeysDesc')}
             </p>
           </div>
           <button
@@ -158,10 +198,10 @@ export const SettingsPage: React.FC = () => {
               setShowKeyModal(true);
               setCreatedRawKey(null);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white hover:bg-accent-hover text-xs font-medium transition-colors shadow-subtle"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white hover:bg-accent-hover text-xs font-medium transition-colors shadow-subtle shrink-0 whitespace-nowrap"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Generate Key</span>
+            <span>{t('settings.generateKey')}</span>
           </button>
         </div>
 
@@ -174,15 +214,15 @@ export const SettingsPage: React.FC = () => {
               <div>
                 <div className="text-xs font-medium text-text-primary">{k.name}</div>
                 <div className="text-[11px] font-mono text-text-muted mt-0.5">
-                  {k.key_masked} &bull; Created: {new Date(k.created_at).toLocaleDateString()}
-                  {k.last_used_at && <span> &bull; Last used: {new Date(k.last_used_at).toLocaleTimeString()}</span>}
+                  {k.key_masked} &bull; {t('settings.createdDate', { date: new Date(k.created_at).toLocaleDateString() })}
+                  {k.last_used_at && <span> &bull; {t('settings.lastUsedDate', { date: new Date(k.last_used_at).toLocaleTimeString() })}</span>}
                 </div>
               </div>
 
               <button
                 onClick={() => handleDeleteGatewayKey(k.id)}
                 className="p-1 rounded hover:bg-bg-overlay text-text-muted hover:text-status-error transition-colors"
-                title="Revoke key"
+                title={t('settings.revokeKeyTooltip')}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -193,12 +233,12 @@ export const SettingsPage: React.FC = () => {
 
       {/* Router Engine Settings Form */}
       <form onSubmit={handleSaveSettings} className="p-5 rounded-md bg-bg-surface border border-border-default space-y-6">
-        <h2 className="text-sm font-semibold text-text-primary">Routing & Probing Engine</h2>
+        <h2 className="text-sm font-semibold text-text-primary">{t('settings.routingEngineTitle')}</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">
-              Default Request Timeout (ms)
+              {t('settings.defaultRequestTimeout')}
             </label>
             <input
               type="number"
@@ -206,12 +246,12 @@ export const SettingsPage: React.FC = () => {
               onChange={e => setDefaultTimeout(Number(e.target.value))}
               className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
             />
-            <span className="text-[11px] text-text-muted">Timeout before switching to next fallback target.</span>
+            <span className="text-[11px] text-text-muted">{t('settings.defaultRequestTimeoutDesc')}</span>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">
-              Background Health Probe Interval (ms)
+              {t('settings.probeInterval')}
             </label>
             <input
               type="number"
@@ -219,12 +259,12 @@ export const SettingsPage: React.FC = () => {
               onChange={e => setProbeInterval(Number(e.target.value))}
               className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
             />
-            <span className="text-[11px] text-text-muted">Cadence for probing down targets.</span>
+            <span className="text-[11px] text-text-muted">{t('settings.probeIntervalDesc')}</span>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">
-              Cooldown Base (ms)
+              {t('settings.cooldownBase')}
             </label>
             <input
               type="number"
@@ -232,12 +272,12 @@ export const SettingsPage: React.FC = () => {
               onChange={e => setCooldownBase(Number(e.target.value))}
               className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
             />
-            <span className="text-[11px] text-text-muted">Initial backoff duration after HTTP 429/5xx.</span>
+            <span className="text-[11px] text-text-muted">{t('settings.cooldownBaseDesc')}</span>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">
-              Cooldown Maximum Cap (ms)
+              {t('settings.cooldownMax')}
             </label>
             <input
               type="number"
@@ -245,24 +285,24 @@ export const SettingsPage: React.FC = () => {
               onChange={e => setCooldownMax(Number(e.target.value))}
               className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
             />
-            <span className="text-[11px] text-text-muted">Maximum exponential backoff limit.</span>
+            <span className="text-[11px] text-text-muted">{t('settings.cooldownMaxDesc')}</span>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">
-              Auto-Chain Model Policy (Default Failover Behavior)
+              {t('settings.autoChainPolicy')}
             </label>
             <select
               value={chainAutoPolicy}
               onChange={e => setChainAutoPolicy(e.target.value as any)}
               className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary cursor-pointer"
             >
-              <option value="free_only">100% Free Tier Only (Guaranteed $0 - Default)</option>
-              <option value="free_first">Free First + Paid Fallback (Emergency Safety Net)</option>
-              <option value="all">All Models (Include Paid)</option>
+              <option value="free_only">{t('settings.policyFreeOnly')}</option>
+              <option value="free_first">{t('settings.policyFreeFirst')}</option>
+              <option value="all">{t('settings.policyAll')}</option>
             </select>
             <span className="text-[11px] text-text-muted">
-              Guarantees failover chains prioritize free endpoints, preventing unexpected credit consumption and 402 errors.
+              {t('settings.autoChainPolicyDesc')}
             </span>
           </div>
         </div>
@@ -277,34 +317,33 @@ export const SettingsPage: React.FC = () => {
               className="mt-0.5 rounded border-border-default text-accent focus:ring-accent"
             />
             <div>
-              <div className="text-xs font-medium text-text-primary">Enable Local Response Cache (identical prompts only)</div>
+              <div className="text-xs font-medium text-text-primary">{t('settings.enableLocalCache')}</div>
               <div className="text-[11px] text-text-muted">
-                Exact-match cache keyed on messages, model, and all sampling parameters (temperature, top_p, max_tokens, seed, tools).
-                Repeat requests return in &lt;5ms at $0 cost with no upstream rate-limit usage.
+                {t('settings.enableLocalCacheDesc')}
               </div>
             </div>
           </label>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-7">
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1">Cache TTL (ms)</label>
+              <label className="block text-xs font-medium text-text-secondary mb-1">{t('settings.cacheTtl')}</label>
               <input
                 type="number"
                 value={cacheTtlMs}
                 onChange={e => setCacheTtlMs(Number(e.target.value))}
                 className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
               />
-              <span className="text-[11px] text-text-muted">Entries older than this are evicted.</span>
+              <span className="text-[11px] text-text-muted">{t('settings.cacheTtlDesc')}</span>
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1">Max Cache Entries</label>
+              <label className="block text-xs font-medium text-text-secondary mb-1">{t('settings.maxCacheEntries')}</label>
               <input
                 type="number"
                 value={cacheMaxEntries}
                 onChange={e => setCacheMaxEntries(Number(e.target.value))}
                 className="w-full px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
               />
-              <span className="text-[11px] text-text-muted">Least-recently-used entries are evicted first.</span>
+              <span className="text-[11px] text-text-muted">{t('settings.maxCacheEntriesDesc')}</span>
             </div>
           </div>
 
@@ -316,10 +355,9 @@ export const SettingsPage: React.FC = () => {
               className="mt-0.5 rounded border-border-default text-accent focus:ring-accent"
             />
             <div>
-              <div className="text-xs font-medium text-text-primary">Enable Prompt Token Optimizer (lossy)</div>
+              <div className="text-xs font-medium text-text-primary">{t('settings.enablePromptOptimizer')}</div>
               <div className="text-[11px] text-text-muted">
-                Off by default. Collapses redundant whitespace and build logs and de-duplicates large code blocks repeated
-                across older turns. Never modifies the two most recent turns or system prompts.
+                {t('settings.enablePromptOptimizerDesc')}
               </div>
             </div>
           </label>
@@ -332,23 +370,22 @@ export const SettingsPage: React.FC = () => {
               className="mt-0.5 rounded border-border-default text-accent focus:ring-accent"
             />
             <div>
-              <div className="text-xs font-medium text-text-primary">Enable Smart Rate-Limit Governor</div>
+              <div className="text-xs font-medium text-text-primary">{t('settings.enableRateGovernor')}</div>
               <div className="text-[11px] text-text-muted">
-                Tracks a rolling requests-per-minute window per key and rotates to a sibling key before the upstream
-                provider returns HTTP 429.
+                {t('settings.enableRateGovernorDesc')}
               </div>
             </div>
           </label>
 
           <div className="pl-7">
-            <label className="block text-xs font-medium text-text-secondary mb-1">Rate Governor Ceiling (requests / minute / key)</label>
+            <label className="block text-xs font-medium text-text-secondary mb-1">{t('settings.rateGovernorCeiling')}</label>
             <input
               type="number"
               value={rateGovernorRpm}
               onChange={e => setRateGovernorRpm(Number(e.target.value))}
               className="w-full md:w-64 px-3 py-1.5 text-xs font-mono rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
             />
-            <span className="text-[11px] text-text-muted">Conservative default of 25 RPM suits most free tiers.</span>
+            <span className="text-[11px] text-text-muted">{t('settings.rateGovernorCeilingDesc')}</span>
           </div>
 
           <label className="flex items-start gap-3 cursor-pointer">
@@ -359,9 +396,9 @@ export const SettingsPage: React.FC = () => {
               className="mt-0.5 rounded border-border-default text-accent focus:ring-accent"
             />
             <div>
-              <div className="text-xs font-medium text-text-primary">Restart on Mid-Stream Failure</div>
+              <div className="text-xs font-medium text-text-primary">{t('settings.restartOnMidstream')}</div>
               <div className="text-[11px] text-text-muted">
-                Off by default. When enabled, if an upstream stream dies after tokens were already emitted, the router restarts the full request on the fallback target instead of sending a stream error event.
+                {t('settings.restartOnMidstreamDesc')}
               </div>
             </div>
           </label>
@@ -374,9 +411,9 @@ export const SettingsPage: React.FC = () => {
               className="mt-0.5 rounded border-border-default text-accent focus:ring-accent"
             />
             <div>
-              <div className="text-xs font-medium text-text-primary">Store Request & Response Payloads in Logs</div>
+              <div className="text-xs font-medium text-text-primary">{t('settings.storePayloads')}</div>
               <div className="text-[11px] text-text-muted">
-                Off by default for privacy. Only store prompt and completion bodies when debugging prompts locally.
+                {t('settings.storePayloadsDesc')}
               </div>
             </div>
           </label>
@@ -390,13 +427,13 @@ export const SettingsPage: React.FC = () => {
             />
             <div>
               <div className="flex items-center gap-1.5 text-xs font-medium text-text-primary">
-                <span>Allow Local Network Access (LAN)</span>
+                <span>{t('settings.allowLan')}</span>
                 <span className="px-1.5 py-0.2 rounded bg-status-warning-bg text-status-warning text-[10px]">
-                  Security Warning
+                  {t('settings.securityWarning')}
                 </span>
               </div>
               <div className="text-[11px] text-text-muted mt-0.5">
-                Binds to 0.0.0.0 instead of 127.0.0.1. Other devices on your local network will be able to access the gateway port.
+                {t('settings.allowLanDesc')}
               </div>
             </div>
           </label>
@@ -405,8 +442,8 @@ export const SettingsPage: React.FC = () => {
         {/* Cache Maintenance Box */}
         <div className="pt-4 border-t border-border-subtle flex items-center justify-between">
           <div>
-            <div className="text-xs font-medium text-text-primary">Response Cache Maintenance</div>
-            <div className="text-[11px] text-text-muted">Flush all cached completions if upstream model behavior changed.</div>
+            <div className="text-xs font-medium text-text-primary">{t('settings.cacheMaintenance')}</div>
+            <div className="text-[11px] text-text-muted">{t('settings.cacheMaintenanceDesc')}</div>
           </div>
           <button
             type="button"
@@ -414,7 +451,7 @@ export const SettingsPage: React.FC = () => {
             disabled={clearingCache}
             className="px-3 py-1.5 text-xs font-medium rounded bg-bg-base hover:bg-bg-raised border border-border-default text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
           >
-            {clearingCache ? 'Clearing...' : 'Clear Cache'}
+            {clearingCache ? t('settings.clearingCache') : t('settings.clearCache')}
           </button>
         </div>
 
@@ -422,7 +459,7 @@ export const SettingsPage: React.FC = () => {
           {saveSuccess ? (
             <div className="flex items-center gap-1.5 text-xs text-status-healthy">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Settings saved successfully</span>
+              <span>{t('settings.settingsSavedSuccessfully')}</span>
             </div>
           ) : <div />}
 
@@ -431,7 +468,7 @@ export const SettingsPage: React.FC = () => {
             disabled={savingSettings}
             className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
           >
-            {savingSettings ? 'Saving...' : 'Save Settings'}
+            {savingSettings ? t('settings.savingSettings') : t('settings.saveSettings')}
           </button>
         </div>
       </form>
@@ -441,17 +478,17 @@ export const SettingsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/60" onClick={() => setShowKeyModal(false)} />
           <div className="relative z-10 w-full max-w-md rounded-md bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
-            <h2 className="text-base font-semibold text-text-primary">Create Local Gateway Key</h2>
+            <h2 className="text-base font-semibold text-text-primary">{t('settings.createGatewayKeyModalTitle')}</h2>
 
             {!createdRawKey ? (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Key Name / Label</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">{t('settings.keyNameLabel')}</label>
                   <input
                     type="text"
                     value={newKeyName}
                     onChange={e => setNewKeyName(e.target.value)}
-                    placeholder="e.g. Claude Code Key"
+                    placeholder={t('settings.keyNamePlaceholder')}
                     className="w-full px-3 py-1.5 text-xs rounded bg-bg-base border border-border-default focus:border-accent focus:outline-none text-text-primary"
                   />
                 </div>
@@ -460,21 +497,21 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => setShowKeyModal(false)}
                     className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                   <button
                     onClick={handleCreateGatewayKey}
                     className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors"
                   >
-                    Generate
+                    {t('settings.generate')}
                   </button>
                 </div>
               </div>
             ) : (
               <div className="space-y-3">
                 <div className="p-3 rounded bg-status-healthy-bg border border-[rgba(47,158,68,0.25)] text-xs text-text-primary">
-                  <div className="font-semibold text-status-healthy mb-1">Key Generated Successfully!</div>
-                  Copy this key now. For your security, the gateway stores only a cryptographic hash and will not display the key again.
+                  <div className="font-semibold text-status-healthy mb-1">{t('settings.keyGeneratedSuccess')}</div>
+                  {t('settings.keyGeneratedDesc')}
                 </div>
 
                 <div className="relative rounded bg-bg-base border border-border-subtle p-3">
@@ -484,7 +521,7 @@ export const SettingsPage: React.FC = () => {
                   <button
                     onClick={handleCopyRawKey}
                     className="absolute right-2 top-2 p-1.5 rounded bg-bg-raised hover:bg-bg-overlay text-text-muted hover:text-text-primary border border-border-subtle"
-                    title="Copy key"
+                    title={t('settings.copyKeyTooltip')}
                   >
                     {copiedKey ? <Check className="w-3.5 h-3.5 text-status-healthy" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
@@ -495,7 +532,7 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => setShowKeyModal(false)}
                     className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover"
                   >
-                    Done
+                    {t('common.done')}
                   </button>
                 </div>
               </div>

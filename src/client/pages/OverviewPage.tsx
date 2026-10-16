@@ -5,6 +5,7 @@ import { StatusBadge } from '../components/StatusBadge.js';
 import { ModelLogo } from '../components/ModelLogo.js';
 import { isFreeModelId } from '../../shared/types.js';
 import { Activity, ShieldCheck, Zap, ArrowRight, Cpu, Terminal, Play, Sparkles, DollarSign } from 'lucide-react';
+import { useI18n } from '../i18n/index.js';
 
 interface OverviewPageProps {
   onNavigate: (page: any) => void;
@@ -12,6 +13,7 @@ interface OverviewPageProps {
 }
 
 export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPlayground }) => {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: overview, isLoading } = useOverview();
   const { data: chains = [] } = useChains();
@@ -26,12 +28,14 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
       const res = await fetchJson<any>('/api/providers/detect-local', { method: 'POST' });
       queryClient.invalidateQueries();
       if (res.services?.length > 0) {
-        alert(`Discovered local services: ${res.services.map((s: any) => `${s.name} (${s.models.length} models)`).join(', ')}`);
+        alert(t('overview.discoveredLocalAlert', {
+          services: res.services.map((s: any) => `${s.name} (${s.models.length} models)`).join(', ')
+        }));
       } else {
-        alert('No local Ollama (port 11434) or LM Studio (port 1234) detected running.');
+        alert(t('overview.noLocalDetected'));
       }
     } catch (err: any) {
-      alert(`Detection error: ${err.message}`);
+      alert(t('overview.detectionError', { error: err.message }));
     } finally {
       setDetectingLocal(false);
     }
@@ -66,41 +70,41 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
 
   const statCards = [
     {
-      label: 'Money Saved (vs API Cost)',
+      label: t('overview.statMoneySaved'),
       value: `$${(overview.totalMoneySavedUsd || 0).toFixed(2)}`,
-      subtext: `${(overview.totalTokensSaved || 0).toLocaleString()} tokens via Free & Cache`,
+      subtext: t('overview.statMoneySavedSubtext', { tokens: (overview.totalTokensSaved || 0).toLocaleString() }),
       icon: <DollarSign className="w-4 h-4 text-status-healthy" />,
       accentBorder: 'border-status-healthy/40',
       valueColor: 'text-status-healthy',
     },
     {
-      label: 'Response Cache Hits',
-      value: `${overview.cacheHitCount || 0} Hits`,
-      subtext: 'Exact-match local responses',
+      label: t('overview.statCacheHits'),
+      value: t('overview.statCacheHitsValue', { count: overview.cacheHitCount || 0 }),
+      subtext: t('overview.statCacheHitsSubtext'),
       icon: <Sparkles className="w-4 h-4 text-accent" />,
       accentBorder: 'border-border-default',
       valueColor: 'text-text-primary',
     },
     {
-      label: 'Free & Active Targets',
-      value: `${overview.healthyKeys} Active`,
-      subtext: `${freeModelsCount} free models discovered`,
+      label: t('overview.statFreeTargets'),
+      value: t('overview.statFreeTargetsValue', { count: overview.healthyKeys }),
+      subtext: t('overview.statFreeTargetsSubtext', { count: freeModelsCount }),
       icon: <Cpu className="w-4 h-4 text-[#4DABF7]" />,
       accentBorder: 'border-border-default',
       valueColor: 'text-text-primary',
     },
     {
-      label: 'Failovers Handled',
+      label: t('overview.statFailovers'),
       value: overview.totalFailovers,
-      subtext: 'Zero-downtime key & model fallbacks',
+      subtext: t('overview.statFailoversSubtext'),
       icon: <Zap className="w-4 h-4 text-accent" />,
       accentBorder: 'border-border-default',
       valueColor: 'text-text-primary',
     },
     {
-      label: 'Routing Throughput',
-      value: `${overview.requestsPerMinute} RPM`,
-      subtext: 'Active requests in last 60s',
+      label: t('overview.statThroughput'),
+      value: t('overview.statThroughputValue', { rpm: overview.requestsPerMinute }),
+      subtext: t('overview.statThroughputSubtext'),
       icon: <Activity className="w-4 h-4 text-[#FCC419]" />,
       accentBorder: 'border-border-default',
       valueColor: 'text-text-primary',
@@ -116,14 +120,14 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-semibold text-text-primary tracking-tight">System Overview</h1>
+            <h1 className="text-xl font-semibold text-text-primary tracking-tight">{t('overview.title')}</h1>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-status-healthy-bg text-status-healthy border border-[rgba(47,158,68,0.25)]">
               <Sparkles className="w-3 h-3" />
-              <span>FREE TIER ACTIVE</span>
+              <span>{t('overview.freeTierActive')}</span>
             </span>
           </div>
           <p className="text-xs text-text-secondary mt-1">
-            Real-time local LLM router health, automatic free model failovers, response caching, and live savings.
+            {t('overview.subtitle')}
           </p>
         </div>
 
@@ -132,10 +136,10 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
             onClick={handleDetectLocal}
             disabled={detectingLocal}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-bg-surface border border-border-default hover:bg-bg-raised text-text-primary text-xs font-medium transition-colors"
-            title="Scan for Ollama (11434) and LM Studio (1234)"
+            title={t('overview.detectLocalTitle')}
           >
             <Cpu className="w-3.5 h-3.5 text-[#4DABF7]" />
-            <span>{detectingLocal ? 'Detecting...' : 'Detect Local LLMs'}</span>
+            <span>{detectingLocal ? t('overview.detecting') : t('overview.detectLocal')}</span>
           </button>
 
           <button
@@ -143,7 +147,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-bg-surface border border-border-default hover:bg-bg-raised text-text-primary text-xs font-medium transition-colors"
           >
             <Play className="w-3.5 h-3.5 text-accent" />
-            <span>Interactive Playground</span>
+            <span>{t('overview.interactivePlayground')}</span>
           </button>
 
           <button
@@ -151,7 +155,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors shadow-subtle"
           >
             <Terminal className="w-3.5 h-3.5" />
-            <span>Connect Coding Tools</span>
+            <span>{t('overview.connectTools')}</span>
           </button>
         </div>
       </div>
@@ -159,9 +163,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
       {/* Local AI Gateway Endpoint Banner */}
       <div className="p-4 rounded-md bg-bg-surface border border-border-default flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-text-primary">Local AI Gateway Endpoint</div>
+          <div className="text-xs font-semibold text-text-primary">{t('overview.gatewayEndpointTitle')}</div>
           <div className="text-[11px] text-text-secondary mt-0.5">
-            Connect OpenCode, Claude Code, and editor extensions to <strong className="font-mono text-text-primary">{gatewayV1}</strong>
+            {t('overview.gatewayEndpointDesc', { url: gatewayV1 })}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -171,11 +175,11 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
           <button
             onClick={() => {
               navigator.clipboard.writeText(gatewayV1);
-              alert(`Copied Gateway URL: ${gatewayV1}`);
+              alert(t('overview.copiedUrlAlert', { url: gatewayV1 }));
             }}
             className="px-3 py-1.5 rounded-md bg-bg-raised hover:bg-bg-overlay border border-border-default text-xs font-medium text-text-primary transition-colors"
           >
-            Copy URL
+            {t('overview.copyUrl')}
           </button>
         </div>
       </div>
@@ -188,10 +192,10 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
           </div>
           <div>
             <div className="text-xs font-semibold text-text-primary">
-              Always Route to Free Models First
+              {t('overview.freeBannerTitle')}
             </div>
             <div className="text-[11px] text-text-secondary mt-0.5">
-              Detected {freeModelsCount} verified free models across connected providers. Automatically sets highest-performing free models as Primary Targets.
+              {t('overview.freeBannerDesc', { count: freeModelsCount })}
             </div>
           </div>
         </div>
@@ -202,7 +206,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-status-healthy text-white text-xs font-medium hover:opacity-90 transition-opacity shrink-0 shadow-subtle disabled:opacity-50"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>{buildingFree ? 'Configuring...' : 'Set Free Models as #1 Priority'}</span>
+          <span>{buildingFree ? t('overview.configuring') : t('overview.setFreePriority')}</span>
         </button>
       </div>
 
@@ -227,12 +231,12 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text-primary">Active Routing Chains</h2>
+            <h2 className="text-sm font-semibold text-text-primary">{t('overview.activeChains')}</h2>
             <button
               onClick={() => onNavigate('chains')}
               className="text-xs text-accent hover:underline flex items-center gap-1"
             >
-              <span>Manage Chains</span>
+              <span>{t('overview.manageChains')}</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -250,16 +254,16 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-text-primary">{ac.chainName}</span>
                       <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-bg-raised text-text-secondary border border-border-subtle">
-                        {ac.mode} mode
+                        {t('overview.modeLabel', { mode: ac.mode })}
                       </span>
                       {isFree && (
                         <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-mono font-semibold bg-status-healthy-bg text-status-healthy border border-[rgba(47,158,68,0.3)]">
-                          FREE #1
+                          {t('overview.primaryRouteBadge')}
                         </span>
                       )}
                     </div>
                     <div className="text-xs text-text-muted mt-1">
-                      Primary target for coding tools specifying model <code className="text-text-primary font-mono">{ac.chainName}</code>
+                      {t('overview.primaryTargetDesc', { name: ac.chainName })}
                     </div>
                   </div>
 
@@ -274,7 +278,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
                         <StatusBadge status={ac.activeTarget.status} showText={false} />
                       </div>
                     ) : (
-                      <div className="text-xs text-text-muted italic">No active targets configured</div>
+                      <div className="text-xs text-text-muted italic">{t('overview.noActiveTargets')}</div>
                     )}
                   </div>
                 </div>
@@ -285,13 +289,13 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
 
         {/* Live Errors & Probing Feed */}
         <div className="space-y-4">
-          <h2 className="text-sm font-semibold text-text-primary">Live Router Feed</h2>
+          <h2 className="text-sm font-semibold text-text-primary">{t('overview.liveRouterFeed')}</h2>
           <div className="p-4 rounded-md bg-bg-surface border border-border-default min-h-[220px] flex flex-col justify-between">
             {overview.recentErrors.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-center text-text-muted space-y-2">
                 <ShieldCheck className="w-8 h-8 text-status-healthy opacity-80" />
-                <div className="text-xs font-medium text-text-primary">All Routes Healthy & Active</div>
-                <div className="text-[11px]">Free models streaming without errors or rate limits.</div>
+                <div className="text-xs font-medium text-text-primary">{t('overview.allRoutesHealthy')}</div>
+                <div className="text-[11px]">{t('overview.freeModelsStreaming')}</div>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
@@ -340,9 +344,9 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate, onOpenPl
             )}
 
             <div className="pt-3 border-t border-border-subtle flex items-center justify-between text-[11px] text-text-muted">
-              <span>Prober frequency: 30s</span>
+              <span>{t('overview.proberFrequency')}</span>
               <button onClick={() => onNavigate('logs')} className="text-accent hover:underline">
-                View audit logs
+                {t('overview.viewAuditLogs')}
               </button>
             </div>
           </div>

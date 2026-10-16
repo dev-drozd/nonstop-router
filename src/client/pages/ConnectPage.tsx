@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useConnectConfigs, useChains, useGatewayKeys, fetchJson } from '../api.js';
 import { Terminal, Copy, Check, ExternalLink, FileEdit, CheckCircle2 } from 'lucide-react';
+import { useI18n } from '../i18n/index.js';
 
 export const ConnectPage: React.FC = () => {
+  const { t } = useI18n();
   const { data: chains = [] } = useChains();
   const [selectedChain, setSelectedChain] = useState('auto');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -18,6 +20,19 @@ export const ConnectPage: React.FC = () => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const getToolDescription = (tool: any) => {
+    const key = `connect.tools.${tool.id}.description`;
+    const res = t(key);
+    return res !== key ? res : tool.description;
+  };
+
+  const getToolInstructions = (tool: any) => {
+    const v1Url = connectData?.baseUrl ? `${connectData.baseUrl.replace(/\/+$/, '')}/v1` : 'http://127.0.0.1:4000/v1';
+    const key = `connect.tools.${tool.id}.instructions`;
+    const res = t(key, { url: v1Url });
+    return res !== key ? res : tool.instructions;
   };
 
   const handlePreviewWrite = async (toolId: string, toolName: string) => {
@@ -60,15 +75,15 @@ export const ConnectPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary tracking-tight">Connect AI Tools</h1>
+          <h1 className="text-xl font-semibold text-text-primary tracking-tight">{t('connect.title')}</h1>
           <p className="text-xs text-text-secondary mt-1">
-            Pre-filled configuration snippets for your local AI coding tools and agents.
+            {t('connect.subtitle')}
           </p>
         </div>
 
         {/* Chain selector */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-text-muted">Target Chain:</span>
+          <span className="text-xs text-text-muted">{t('connect.targetChain')}</span>
           <select
             value={selectedChain}
             onChange={e => setSelectedChain(e.target.value)}
@@ -104,13 +119,13 @@ export const ConnectPage: React.FC = () => {
                   target="_blank"
                   rel="noreferrer"
                   className="text-text-muted hover:text-text-primary p-1"
-                  title="View tool documentation"
+                  title={t('connect.viewDocumentation')}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
 
-              <p className="text-xs text-text-secondary">{tool.description}</p>
+              <p className="text-xs text-text-secondary">{getToolDescription(tool)}</p>
 
               {/* Code Snippet Box */}
               <div className="relative rounded bg-bg-base border border-border-subtle p-3 mt-2">
@@ -121,7 +136,7 @@ export const ConnectPage: React.FC = () => {
                 <button
                   onClick={() => handleCopy(tool.id, tool.snippet)}
                   className="absolute right-2 top-2 p-1.5 rounded bg-bg-raised hover:bg-bg-overlay text-text-muted hover:text-text-primary border border-border-subtle transition-colors"
-                  title="Copy snippet"
+                  title={t('connect.copySnippet')}
                 >
                   {copiedId === tool.id ? (
                     <Check className="w-3.5 h-3.5 text-status-healthy" />
@@ -132,20 +147,20 @@ export const ConnectPage: React.FC = () => {
               </div>
 
               <div className="text-[11px] text-text-muted pt-1">
-                {tool.instructions}
+                {getToolInstructions(tool)}
               </div>
             </div>
 
             {/* Automated One-Click Action for OpenCode, Continue, and Aider */}
             {(tool.id === 'opencode' || tool.id === 'continue' || tool.id === 'aider') && (
               <div className="p-3 bg-bg-raised/40 border-t border-border-subtle flex items-center justify-between">
-                <span className="text-xs font-medium text-text-secondary">Automated Integration</span>
+                <span className="text-xs font-medium text-text-secondary">{t('connect.automatedIntegration')}</span>
                 <button
                   onClick={() => handlePreviewWrite(tool.id, tool.name)}
                   className="flex items-center gap-1.5 px-3 py-1 rounded bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors shadow-subtle"
                 >
                   <FileEdit className="w-3.5 h-3.5" />
-                  <span>Configure {tool.name}</span>
+                  <span>{t('connect.configureTool', { name: tool.name })}</span>
                 </button>
               </div>
             )}
@@ -158,22 +173,22 @@ export const ConnectPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/60" onClick={() => setActiveWriterTool(null)} />
           <div className="relative z-10 w-full max-w-2xl rounded-md bg-bg-surface border border-border-default p-6 shadow-overlay space-y-4">
-            <h2 className="text-base font-semibold text-text-primary">Configure {activeWriterTool.name}</h2>
+            <h2 className="text-base font-semibold text-text-primary">{t('connect.configureToolModalTitle', { name: activeWriterTool.name })}</h2>
 
             {writerPreview ? (
               <div className="space-y-3">
                 <div className="text-xs text-text-secondary">
-                  Target file: <code className="font-mono text-text-primary">{writerPreview.filePath}</code>
+                  {t('connect.targetFile')} <code className="font-mono text-text-primary">{writerPreview.filePath}</code>
                   {writerPreview.backupPath && (
                     <div className="text-status-healthy mt-1">
-                      Backup created at: <code className="font-mono">{writerPreview.backupPath}</code>
+                      {t('connect.backupCreatedAt')} <code className="font-mono">{writerPreview.backupPath}</code>
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-1">
                   <div className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
-                    Configuration Diff Preview
+                    {t('connect.configDiffPreview')}
                   </div>
                   <div className="max-h-72 overflow-y-auto rounded bg-bg-base border border-border-subtle p-3 text-[11px] font-mono whitespace-pre text-text-primary">
                     {writerPreview.updatedText}
@@ -183,12 +198,12 @@ export const ConnectPage: React.FC = () => {
                 {writingStatus === 'done' && (
                   <div className="p-2.5 rounded bg-status-healthy-bg border border-[rgba(47,158,68,0.25)] flex items-center gap-2 text-xs text-status-healthy">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>Configuration successfully updated and backed up. {activeWriterTool.name} is now pointed at NonStop Router.</span>
+                    <span>{t('connect.configUpdateSuccess', { name: activeWriterTool.name })}</span>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="py-8 text-center text-xs text-text-muted">Loading preview...</div>
+              <div className="py-8 text-center text-xs text-text-muted">{t('connect.loadingPreview')}</div>
             )}
 
             <div className="flex justify-end gap-2 pt-3 border-t border-border-subtle">
@@ -197,7 +212,7 @@ export const ConnectPage: React.FC = () => {
                 onClick={() => setActiveWriterTool(null)}
                 className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
               >
-                Close
+                {t('common.close')}
               </button>
               {writingStatus !== 'done' && (
                 <button
@@ -206,7 +221,7 @@ export const ConnectPage: React.FC = () => {
                   disabled={writingStatus === 'writing'}
                   className="px-4 py-1.5 text-xs font-medium rounded bg-accent text-white hover:bg-accent-hover transition-colors shadow-subtle disabled:opacity-50"
                 >
-                  {writingStatus === 'writing' ? 'Writing...' : 'Confirm & Write File'}
+                  {writingStatus === 'writing' ? t('connect.writing') : t('connect.confirmWriteFile')}
                 </button>
               )}
             </div>

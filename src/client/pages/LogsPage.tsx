@@ -18,8 +18,10 @@ import {
   Terminal,
 } from 'lucide-react';
 import type { RequestLog } from '../../shared/types.js';
+import { useI18n } from '../i18n/index.js';
 
 export const LogsPage: React.FC = () => {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [clientTool, setClientTool] = useState('');
@@ -31,7 +33,7 @@ export const LogsPage: React.FC = () => {
   const logs = data?.logs || [];
 
   const handleClearLogs = async () => {
-    if (!confirm('Are you sure you want to clear all request logs?')) return;
+    if (!confirm(t('logs.clearLogsConfirm'))) return;
     try {
       await fetchJson('/api/logs', { method: 'DELETE' });
       queryClient.invalidateQueries({ queryKey: ['logs'] });
@@ -47,9 +49,9 @@ export const LogsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary tracking-tight">Request Audit Logs & Inspector</h1>
+          <h1 className="text-xl font-semibold text-text-primary tracking-tight">{t('logs.title')}</h1>
           <p className="text-xs text-text-secondary mt-1">
-            Complete traces, failover timeline, token metrics, response cache hits, and full payloads.
+            {t('logs.subtitle')}
           </p>
         </div>
 
@@ -59,7 +61,7 @@ export const LogsPage: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-bg-surface border border-border-default hover:bg-bg-raised text-text-muted hover:text-status-error text-xs font-medium transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear Logs</span>
+            <span>{t('logs.clearLogs')}</span>
           </button>
         )}
       </div>
@@ -72,7 +74,7 @@ export const LogsPage: React.FC = () => {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by model, chain, or error message..."
+            placeholder={t('logs.searchPlaceholder')}
             className="w-full pl-8 pr-3 py-1.5 text-xs rounded bg-bg-surface border border-border-default text-text-primary"
           />
         </div>
@@ -82,7 +84,7 @@ export const LogsPage: React.FC = () => {
           onChange={e => setClientTool(e.target.value)}
           className="px-2.5 py-1.5 text-xs rounded bg-bg-surface border border-border-default text-text-primary"
         >
-          <option value="">All Tools</option>
+          <option value="">{t('logs.allTools')}</option>
           <option value="opencode">OpenCode</option>
           <option value="claude-code">Claude Code</option>
           <option value="codex">Codex CLI</option>
@@ -95,21 +97,21 @@ export const LogsPage: React.FC = () => {
         {logs.length === 0 ? (
           <div className="p-12 text-center text-xs text-text-muted space-y-2">
             <img src="/assets/icon.svg" alt="NonStop Router" className="w-8 h-8 mx-auto opacity-50" width={32} height={32} />
-            <div>{isLoading ? 'Loading logs...' : 'No request logs recorded yet.'}</div>
+            <div>{isLoading ? t('logs.loadingLogs') : t('logs.noLogsRecorded')}</div>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-border-subtle bg-bg-raised/50 text-[11px] text-text-muted font-medium">
-                  <th className="py-2.5 px-3">Time</th>
-                  <th className="py-2.5 px-3">Client Tool</th>
-                  <th className="py-2.5 px-3">Route / Model</th>
-                  <th className="py-2.5 px-3">Answering Target</th>
-                  <th className="py-2.5 px-3">Latency / TTFT</th>
-                  <th className="py-2.5 px-3">Tokens</th>
-                  <th className="py-2.5 px-3">Savings</th>
-                  <th className="py-2.5 px-3 text-right">Status</th>
+                  <th className="py-2.5 px-3">{t('logs.thTime')}</th>
+                  <th className="py-2.5 px-3">{t('logs.thClientTool')}</th>
+                  <th className="py-2.5 px-3">{t('logs.thRouteModel')}</th>
+                  <th className="py-2.5 px-3">{t('logs.thAnsweringTarget')}</th>
+                  <th className="py-2.5 px-3">{t('logs.thLatencyTtft')}</th>
+                  <th className="py-2.5 px-3">{t('logs.thTokens')}</th>
+                  <th className="py-2.5 px-3">{t('logs.thSavings')}</th>
+                  <th className="py-2.5 px-3 text-right">{t('logs.thStatus')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
@@ -144,7 +146,7 @@ export const LogsPage: React.FC = () => {
                         {isCached ? (
                           <div className="flex items-center gap-1 text-status-healthy font-medium text-[11px]">
                             <Sparkles className="w-3 h-3" />
-                            <span>Cache (Local SQLite)</span>
+                            <span>{t('logs.cacheLocalSqlite')}</span>
                           </div>
                         ) : log.finalProviderName ? (
                           <div>
@@ -152,13 +154,13 @@ export const LogsPage: React.FC = () => {
                             <div className="text-[10px] text-text-muted">{log.finalProviderName}</div>
                           </div>
                         ) : (
-                          <span className="text-text-muted italic text-[11px]">None (Exhausted)</span>
+                          <span className="text-text-muted italic text-[11px]">{t('logs.noneExhausted')}</span>
                         )}
                       </td>
 
                       <td className="py-2.5 px-3 font-mono text-[11px] text-text-secondary">
                         <div>{log.latencyMs}ms</div>
-                        {log.ttftMs && <div className="text-[10px] text-text-muted">TTFT: {log.ttftMs}ms</div>}
+                        {log.ttftMs && <div className="text-[10px] text-text-muted">{t('logs.ttftPrefix', { ms: log.ttftMs })}</div>}
                       </td>
 
                       <td className="py-2.5 px-3 font-mono text-[11px] text-text-secondary">
@@ -176,7 +178,7 @@ export const LogsPage: React.FC = () => {
                           </span>
                         ) : isCached ? (
                           <span className="text-[10px] font-mono text-status-healthy bg-status-healthy/15 px-1.5 py-0.5 rounded">
-                            FREE
+                            {t('common.free')}
                           </span>
                         ) : (
                           <span className="text-text-muted text-[11px]">-</span>
@@ -187,7 +189,7 @@ export const LogsPage: React.FC = () => {
                         <div className="flex items-center justify-end gap-1.5">
                           {isCached && (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-status-healthy/15 text-status-healthy border border-status-healthy/30">
-                              CACHED
+                              {t('logs.cachedBadge')}
                             </span>
                           )}
                           {failovers > 0 && (
@@ -195,7 +197,7 @@ export const LogsPage: React.FC = () => {
                               className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-accent-subtle text-accent border border-accent-border"
                               title={`${failovers} failover(s) occurred`}
                             >
-                              {failovers} fallback
+                              {t('logs.fallbackOccurred', { count: failovers })}
                             </span>
                           )}
                           <span
@@ -244,7 +246,7 @@ export const LogsPage: React.FC = () => {
               <button
                 onClick={() => setInspectLog(null)}
                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-raised"
-                title="Close"
+                title={t('common.close')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -253,21 +255,21 @@ export const LogsPage: React.FC = () => {
             {/* Metrics Header Bar */}
             <div className="grid grid-cols-4 gap-2 p-3 bg-bg-raised/50 border-b border-border-subtle text-xs font-mono">
               <div>
-                <span className="text-text-muted text-[10px] block">LATENCY</span>
+                <span className="text-text-muted text-[10px] block">{t('logs.latencyMetric')}</span>
                 <span className="text-text-primary font-semibold">{inspectLog.latencyMs}ms</span>
               </div>
               <div>
-                <span className="text-text-muted text-[10px] block">TTFT</span>
+                <span className="text-text-muted text-[10px] block">{t('logs.ttftMetric')}</span>
                 <span className="text-text-primary font-semibold">{inspectLog.ttftMs ? `${inspectLog.ttftMs}ms` : '-'}</span>
               </div>
               <div>
-                <span className="text-text-muted text-[10px] block">TOTAL TOKENS</span>
+                <span className="text-text-muted text-[10px] block">{t('logs.totalTokensMetric')}</span>
                 <span className="text-text-primary font-semibold">{inspectLog.totalTokens || '-'}</span>
               </div>
               <div>
-                <span className="text-text-muted text-[10px] block">SAVINGS</span>
+                <span className="text-text-muted text-[10px] block">{t('logs.savingsMetric')}</span>
                 <span className="text-status-healthy font-semibold">
-                  {inspectLog.moneySavedUsd ? `+$${inspectLog.moneySavedUsd.toFixed(4)}` : inspectLog.cached ? 'FREE (Cached)' : '$0.00'}
+                  {inspectLog.moneySavedUsd ? `+$${inspectLog.moneySavedUsd.toFixed(4)}` : inspectLog.cached ? t('logs.freeCached') : '$0.00'}
                 </span>
               </div>
             </div>
@@ -275,20 +277,20 @@ export const LogsPage: React.FC = () => {
             {/* Tabs Bar */}
             <div className="flex border-b border-border-subtle px-3 pt-2 gap-4 text-xs font-medium">
               {[
-                { id: 'overview', label: 'Attempts & Route' },
-                { id: 'request', label: 'Request Payload' },
-                { id: 'response', label: 'Response Payload' },
-              ].map(t => (
+                { id: 'overview', label: t('logs.tabAttemptsRoute') },
+                { id: 'request', label: t('logs.tabRequestPayload') },
+                { id: 'response', label: t('logs.tabResponsePayload') },
+              ].map(tTab => (
                 <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id as any)}
+                  key={tTab.id}
+                  onClick={() => setActiveTab(tTab.id as any)}
                   className={`pb-2 border-b-2 transition-colors ${
-                    activeTab === t.id
+                    activeTab === tTab.id
                       ? 'border-accent text-accent font-semibold'
                       : 'border-transparent text-text-muted hover:text-text-primary'
                   }`}
                 >
-                  {t.label}
+                  {tTab.label}
                 </button>
               ))}
             </div>
@@ -298,7 +300,7 @@ export const LogsPage: React.FC = () => {
               {activeTab === 'overview' && (
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-xs font-semibold text-text-primary mb-2">Failover Attempt Timeline</h3>
+                    <h3 className="text-xs font-semibold text-text-primary mb-2">{t('logs.failoverAttemptTimeline')}</h3>
                     <div className="space-y-2">
                       {inspectLog.targetsAttempted?.map((att: any, idx: number) => (
                         <div
@@ -326,7 +328,7 @@ export const LogsPage: React.FC = () => {
 
                   {inspectLog.errorMessage && (
                     <div className="p-3 rounded-lg bg-status-error-bg/30 border border-status-error/30 text-xs text-status-error">
-                      <strong className="block mb-1">Final Failure:</strong>
+                      <strong className="block mb-1">{t('logs.finalFailure')}</strong>
                       {inspectLog.errorMessage}
                     </div>
                   )}
@@ -336,7 +338,7 @@ export const LogsPage: React.FC = () => {
               {activeTab === 'request' && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-text-secondary">Raw Incoming Request</span>
+                    <span className="text-xs font-medium text-text-secondary">{t('logs.rawIncomingRequest')}</span>
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(JSON.stringify(inspectLog.requestBody, null, 2));
@@ -346,11 +348,11 @@ export const LogsPage: React.FC = () => {
                       className="flex items-center gap-1 text-[11px] text-accent hover:underline"
                     >
                       {copiedPayload ? <Check className="w-3 h-3 text-status-healthy" /> : <Copy className="w-3 h-3" />}
-                      <span>Copy JSON</span>
+                      <span>{t('logs.copyJson')}</span>
                     </button>
                   </div>
                   <pre className="p-3 rounded-lg bg-bg-base border border-border-default text-[11px] font-mono text-text-primary overflow-x-auto whitespace-pre-wrap max-h-96">
-                    {inspectLog.requestBody ? JSON.stringify(inspectLog.requestBody, null, 2) : 'No payload recorded (payload storage disabled in settings).'}
+                    {inspectLog.requestBody ? JSON.stringify(inspectLog.requestBody, null, 2) : t('logs.noPayloadRecorded')}
                   </pre>
                 </div>
               )}
@@ -358,7 +360,7 @@ export const LogsPage: React.FC = () => {
               {activeTab === 'response' && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-text-secondary">Captured Output Payload</span>
+                    <span className="text-xs font-medium text-text-secondary">{t('logs.capturedOutputPayload')}</span>
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(JSON.stringify(inspectLog.responseBody, null, 2));
@@ -368,11 +370,11 @@ export const LogsPage: React.FC = () => {
                       className="flex items-center gap-1 text-[11px] text-accent hover:underline"
                     >
                       {copiedPayload ? <Check className="w-3 h-3 text-status-healthy" /> : <Copy className="w-3 h-3" />}
-                      <span>Copy JSON</span>
+                      <span>{t('logs.copyJson')}</span>
                     </button>
                   </div>
                   <pre className="p-3 rounded-lg bg-bg-base border border-border-default text-[11px] font-mono text-text-primary overflow-x-auto whitespace-pre-wrap max-h-96">
-                    {inspectLog.responseBody ? JSON.stringify(inspectLog.responseBody, null, 2) : 'Response payload not available (streaming chunks or payload storage disabled).'}
+                    {inspectLog.responseBody ? JSON.stringify(inspectLog.responseBody, null, 2) : t('logs.responsePayloadNotAvailable')}
                   </pre>
                 </div>
               )}
